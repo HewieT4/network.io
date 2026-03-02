@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network.IO Monitor</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Syne', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['DM Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+                    },
+                    colors: {
+                        'bg-primary': '#0a0a0f',
+                        'bg-card': '#111118',
+                        'bg-elevated': '#16161f',
+                        'accent-cyan': '#00e5ff',
+                        'accent-purple': '#a855f7',
+                        'accent-green': '#22d3a0',
+                        'text-primary': '#f0f0f5',
+                        'text-muted': '#6b7280',
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-bg-primary text-text-primary font-sans antialiased selection:bg-accent-cyan/30 selection:text-accent-cyan;
+                background-image: radial-gradient(circle at 50% 50%, rgba(0, 229, 255, 0.03) 0%, transparent 50%);
+            }
+
+            body::before {
+                content: "";
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                opacity: 0.03;
+                z-index: 9999;
+                background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            }
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+
+        .animate-pulse-dot {
+            animation: pulse-dot 2s infinite ease-in-out;
+        }
+
+        .backdrop-blur-nav {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .page {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+        }
+
+        .page.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .nav-link.active {
+            @apply text-accent-cyan;
+        }
+        
+        .nav-link.active span {
+            @apply w-full;
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.8s ease-out;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Architecture Diagram Lines */
+        .arch-line {
+            @apply bg-white/10;
+            transition: transform 1s ease-out;
+            transform-origin: top;
+            transform: scaleY(0);
+        }
+        .arch-line.active {
+            transform: scaleY(1);
+        }
+        .arch-line-h {
+            @apply bg-white/10;
+            transition: transform 1s ease-out;
+            transform-origin: left;
+            transform: scaleX(0);
+        }
+        .arch-line-h.active {
+            transform: scaleX(1);
+        }
+
+        /* Mobile Menu */
+        #mobile-menu {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+        #mobile-menu.open {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- Nav -->
+    <nav id="navbar" class="fixed top-0 left-0 w-full z-50 transition-all duration-300 py-6 bg-transparent">
+        <div class="max-w-7xl mx-auto px-6 flex justify-between items-center">
+            <a href="#home" class="font-mono text-accent-cyan font-bold tracking-tighter text-xl">
+                &lt; NETWORK.IO /&gt;
+            </a>
+            
+            <div class="hidden md:flex items-center gap-8">
+                <a href="#home" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="home">
+                    Home
+                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <a href="#projects" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="projects">
+                    Projects
+                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <a href="#infrastructure" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="infrastructure">
+                    Infrastructure
+                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <a href="#contact" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="contact">
+                    Contact
+                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <div class="flex items-center gap-2 pl-4 border-l border-white/10">
+                    <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse-dot"></span>
+                    <span class="font-mono text-[10px] text-accent-green tracking-widest uppercase">Systems Online</span>
+                </div>
+            </div>
+            
+            <button id="menu-toggle" class="md:hidden text-text-primary z-50">
+                <i data-lucide="menu" id="menu-icon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu Overlay -->
+    <div id="mobile-menu" class="fixed inset-0 bg-bg-primary z-40 flex flex-col items-center justify-center gap-8 md:hidden">
+        <a href="#home" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="home">Home</a>
+        <a href="#projects" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="projects">Projects</a>
+        <a href="#infrastructure" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="infrastructure">Infrastructure</a>
+        <a href="#contact" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="contact">Contact</a>
+        <div class="flex items-center gap-2 mt-4">
+            <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse-dot"></span>
+            <span class="font-mono text-xs text-accent-green tracking-widest uppercase">Systems Online</span>
+        </div>
+    </div>
+
+    <main>
+        <!-- Home Page -->
+        <div class="page" id="page-home">
+            <section class="pt-40 pb-20 px-6 text-center">
+                <div class="max-w-4xl mx-auto">
+                    <h1 class="text-5xl md:text-7xl font-extrabold text-white mb-6 tracking-tight reveal">
+                        Infrastructure. <span class="text-accent-cyan">Visualized.</span>
+                    </h1>
+                    <p class="text-lg md:text-xl text-text-muted mb-10 max-w-2xl mx-auto reveal" style="transition-delay: 200ms">
+                        Real-time network monitoring with sub-second telemetry. 
+                        Designed for scale, built for performance.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center reveal" style="transition-delay: 400ms">
+                        <a href="#projects" class="px-8 py-4 bg-accent-cyan text-bg-primary font-bold rounded-lg hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all active:scale-95 text-center">
+                            [ View Projects ]
+                        </a>
+                        <a href="https://github.com" target="_blank" class="px-8 py-4 border border-white/20 text-white font-bold rounded-lg hover:bg-white/5 transition-all flex items-center justify-center gap-2 active:scale-95">
+                            [ GitHub <i data-lucide="github" class="w-4 h-4"></i> ]
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="px-6 py-20 flex justify-center">
+                <div class="w-full max-w-5xl bg-bg-card rounded-[20px] border border-white/10 overflow-hidden shadow-2xl group hover:-translate-y-1 transition-transform duration-500 reveal">
+                    <div class="p-8 flex flex-col md:flex-row justify-between items-start gap-6">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="border-l-2 border-accent-cyan pl-2 font-mono text-[10px] font-bold text-accent-cyan tracking-widest uppercase">Networking</span>
+                            </div>
+                            <h2 class="text-3xl font-bold text-white mb-3">Network Monitor Dashboard</h2>
+                            <p class="text-text-muted max-w-xl">
+                                A custom networking dashboard designed to monitor traffic and server status, reflecting expertise in infrastructure.
+                            </p>
+                        </div>
+                        <div class="flex gap-4">
+                            <button class="p-2 rounded-full bg-white/5 text-text-muted hover:text-accent-cyan hover:bg-accent-cyan/10 transition-all">
+                                <i data-lucide="github" class="w-5 h-5"></i>
+                            </button>
+                            <button class="p-2 rounded-full bg-white/5 text-text-muted hover:text-accent-cyan hover:bg-accent-cyan/10 transition-all">
+                                <i data-lucide="external-link" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mx-8 mb-8 bg-[#0d0d14] rounded-xl border border-white/10 overflow-hidden relative">
+                        <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-accent-cyan via-accent-purple to-accent-cyan opacity-50"></div>
+                        
+                        <div class="p-4 border-b border-white/5 flex justify-between items-center">
+                            <div class="flex items-center gap-2 font-mono text-[10px] text-text-muted">
+                                USERS: LAST 7 DAYS USING MEDIAN <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                            </div>
+                            <div class="flex gap-2">
+                                <div class="w-2 h-2 rounded-full bg-white/10"></div>
+                                <div class="w-2 h-2 rounded-full bg-white/10"></div>
+                                <div class="w-2 h-2 rounded-full bg-white/10"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2">
+                            <div class="p-6 border-r border-b border-white/5">
+                                <div class="flex justify-between items-center mb-4">
+                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Load Time vs Bounce Rate</span>
+                                    <span class="font-mono text-[10px] text-accent-cyan">57.1%</span>
+                                </div>
+                                <div class="h-32 relative">
+                                    <canvas id="chart1"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="p-6 border-b border-white/5">
+                                <div class="flex justify-between items-center mb-4">
+                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Start Render vs Bounce Rate</span>
+                                    <span class="font-mono text-[10px] text-accent-purple">LIVE</span>
+                                </div>
+                                <div class="h-32">
+                                    <canvas id="chart2"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="p-6 border-r border-white/5">
+                                <div class="flex justify-between items-center mb-6">
+                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Page Views vs Onload</span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-4 mb-6">
+                                    <div>
+                                        <div class="text-xl font-bold text-accent-green">0.7s</div>
+                                        <div class="text-[8px] text-text-muted uppercase font-mono">Page Load LUX</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xl font-bold text-accent-purple">2.7M</div>
+                                        <div class="text-[8px] text-text-muted uppercase font-mono">Page Views</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xl font-bold text-white">40.6%</div>
+                                        <div class="text-[8px] text-text-muted uppercase font-mono">Bounce Rate</div>
+                                    </div>
+                                </div>
+                                <div class="h-24">
+                                    <canvas id="chart3"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="p-6">
+                                <div class="flex justify-between items-center mb-6">
+                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Sessions</span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-4 mb-6">
+                                    <div>
+                                        <div class="text-xl font-bold text-accent-green">479K</div>
+                                        <div class="text-[8px] text-text-muted uppercase font-mono">Sessions LUX</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xl font-bold text-white">17min</div>
+                                        <div class="text-[8px] text-text-muted uppercase font-mono">Length</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xl font-bold text-accent-cyan">2pvs</div>
+                                        <div class="text-[8px] text-text-muted uppercase font-mono">Per Session</div>
+                                    </div>
+                                </div>
+                                <div class="h-24">
+                                    <canvas id="chart4"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Row -->
+            <section class="max-w-5xl mx-auto px-6 py-12">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-0">
+                    <div class="flex flex-col items-center text-center md:border-r border-white/10">
+                        <div class="text-4xl md:text-5xl font-bold text-accent-cyan mb-2 counter" data-target="12">0</div>
+                        <div class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Active Nodes monitored</div>
+                    </div>
+                    <div class="flex flex-col items-center text-center md:border-r border-white/10">
+                        <div class="text-4xl md:text-5xl font-bold text-accent-cyan mb-2 counter" data-target="99.98" data-suffix="%">0</div>
+                        <div class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Uptime this month</div>
+                    </div>
+                    <div class="flex flex-col items-center text-center">
+                        <div class="text-4xl md:text-5xl font-bold text-accent-cyan mb-2 counter" data-target="50" data-prefix="<" data-suffix="ms">0</div>
+                        <div class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Avg response time</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Projects Page -->
+        <div class="page" id="page-projects">
+            <section class="pt-40 pb-20 px-6">
+                <div class="max-w-7xl mx-auto">
+                    <div class="mb-16">
+                        <span class="font-mono text-xs text-accent-cyan tracking-[0.2em] uppercase mb-4 block">// ALL PROJECTS</span>
+                        <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-6 tracking-tight">What I've Built</h1>
+                        <p class="text-text-muted font-mono max-w-2xl">A collection of infrastructure tools, monitoring systems, and network automation projects.</p>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="flex flex-wrap gap-3 mb-12">
+                        <button class="filter-btn active px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="all">All</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="networking">Networking</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="python">Python</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="security">Security</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="automation">Automation</button>
+                    </div>
+
+                    <!-- Project Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="project-grid">
+                        <!-- Project 1 -->
+                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="networking python">
+                            <div class="h-1 w-full bg-accent-cyan"></div>
+                            <div class="p-6">
+                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">NETWORKING</span>
+                                <h3 class="text-xl font-bold text-white mb-3">Network Monitor Dashboard</h3>
+                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Real-time network traffic visualization with sub-second telemetry using SNMP polling and Grafana dashboards. Monitors 12 active Cisco nodes with 99.98% uptime tracking.</p>
+                                <div class="flex flex-wrap gap-2 mb-6">
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Cisco</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">SNMP</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Grafana</span>
+                                </div>
+                                <div class="flex justify-end gap-3">
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project 2 -->
+                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="automation python">
+                            <div class="h-1 w-full bg-accent-purple"></div>
+                            <div class="p-6">
+                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">AUTOMATION</span>
+                                <h3 class="text-xl font-bold text-white mb-3">AutoNet Config Manager</h3>
+                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Automated network device configuration management tool that pushes IOS configs to 50+ Cisco routers via Netmiko. Includes rollback support and diff-based change detection.</p>
+                                <div class="flex flex-wrap gap-2 mb-6">
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Netmiko</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Cisco IOS</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">CLI</span>
+                                </div>
+                                <div class="flex justify-end gap-3">
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project 3 -->
+                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="security python">
+                            <div class="h-1 w-full bg-accent-green"></div>
+                            <div class="p-6">
+                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">SECURITY</span>
+                                <h3 class="text-xl font-bold text-white mb-3">Packet Sentinel</h3>
+                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Deep packet inspection tool built with Scapy that detects anomalous traffic patterns and generates real-time alerts. Integrates with Slack for instant incident notifications.</p>
+                                <div class="flex flex-wrap gap-2 mb-6">
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Scapy</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Security</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Slack API</span>
+                                </div>
+                                <div class="flex justify-end gap-3">
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project 4 -->
+                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="networking python">
+                            <div class="h-1 w-full bg-accent-cyan"></div>
+                            <div class="p-6">
+                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">NETWORKING</span>
+                                <h3 class="text-xl font-bold text-white mb-3">Topology Mapper</h3>
+                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Automated network topology discovery using CDP/LLDP neighbor data. Generates interactive SVG network diagrams from live device data with zero manual input.</p>
+                                <div class="flex flex-wrap gap-2 mb-6">
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">NetworkX</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">SVG</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">LLDP</span>
+                                </div>
+                                <div class="flex justify-end gap-3">
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project 5 -->
+                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="automation python">
+                            <div class="h-1 w-full bg-accent-purple"></div>
+                            <div class="p-6">
+                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">AUTOMATION</span>
+                                <h3 class="text-xl font-bold text-white mb-3">Syslog Aggregator</h3>
+                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Centralized syslog collection and parsing pipeline that ingests logs from 200+ network devices. Uses regex-based classification to flag critical events with severity scoring.</p>
+                                <div class="flex flex-wrap gap-2 mb-6">
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Syslog</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Regex</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Elasticsearch</span>
+                                </div>
+                                <div class="flex justify-end gap-3">
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project 6 -->
+                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="security python">
+                            <div class="h-1 w-full bg-accent-green"></div>
+                            <div class="p-6">
+                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">SECURITY</span>
+                                <h3 class="text-xl font-bold text-white mb-3">VPN Uptime Tracker</h3>
+                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Continuous monitoring of IPSec/SSL VPN tunnels across 8 remote sites. Sends automated failover alerts and generates weekly PDF uptime reports via email.</p>
+                                <div class="flex flex-wrap gap-2 mb-6">
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">VPN</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">IPSec</span>
+                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">SMTP</span>
+                                </div>
+                                <div class="flex justify-end gap-3">
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
+                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Infrastructure Page -->
+        <div class="page" id="page-infrastructure">
+            <section class="pt-40 pb-20 px-6">
+                <div class="max-w-7xl mx-auto">
+                    <div class="mb-16">
+                        <span class="font-mono text-xs text-accent-cyan tracking-[0.2em] uppercase mb-4 block">// INFRASTRUCTURE</span>
+                        <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-6 tracking-tight">The Stack Behind the Work</h1>
+                        <p class="text-text-muted font-mono max-w-2xl">Every layer of the infrastructure I work with — from physical hardware to monitoring pipelines.</p>
+                    </div>
+
+                    <!-- Skills Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-24">
+                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
+                            <div class="flex items-center gap-4 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center text-accent-cyan">
+                                    <i data-lucide="server"></i>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Network Devices</h3>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Cisco IOS</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Cisco ASA</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Juniper</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">MikroTik</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">HP Procurve</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
+                            <div class="flex items-center gap-4 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-accent-purple/10 flex items-center justify-center text-accent-purple">
+                                    <i data-lucide="activity"></i>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Monitoring & Observability</h3>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Grafana</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Prometheus</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">SNMP</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Zabbix</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">ELK Stack</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
+                            <div class="flex items-center gap-4 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-accent-green/10 flex items-center justify-center text-accent-green">
+                                    <i data-lucide="code"></i>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Automation & Scripting</h3>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Python</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Netmiko</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Nornir</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Ansible</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Bash</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
+                            <div class="flex items-center gap-4 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center text-accent-cyan">
+                                    <i data-lucide="shield"></i>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Security</h3>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Wireshark</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Scapy</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">pfSense</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">IPSec VPN</span>
+                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">ACLs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Architecture Diagram -->
+                    <div class="mb-24">
+                        <h3 class="text-2xl font-bold text-white mb-12 text-center">System Architecture</h3>
+                        <div class="max-w-3xl mx-auto relative p-12 bg-bg-card/50 border border-white/5 rounded-2xl">
+                            <!-- Internet Layer -->
+                            <div class="flex justify-center mb-16">
+                                <div class="px-8 py-4 border-2 border-orange-500/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10">INTERNET / WAN</div>
+                            </div>
+
+                            <!-- Line Internet to Firewall -->
+                            <div class="absolute left-1/2 top-[88px] w-0.5 h-16 arch-line -translate-x-1/2"></div>
+
+                            <!-- Firewall Layer -->
+                            <div class="flex justify-center mb-16">
+                                <div class="px-8 py-4 border-2 border-accent-cyan/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10">FIREWALL / ASA</div>
+                            </div>
+
+                            <!-- Line Firewall to Core -->
+                            <div class="absolute left-1/2 top-[184px] w-0.5 h-16 arch-line -translate-x-1/2"></div>
+
+                            <!-- Core & Monitoring Layer -->
+                            <div class="flex justify-center gap-12 md:gap-24 mb-16">
+                                <div class="px-8 py-4 border-2 border-accent-purple/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10">CORE SWITCH (L3)</div>
+                                <div class="px-8 py-4 border-2 border-accent-green/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10 relative">
+                                    MONITORING SERVER
+                                    <!-- Dashed connection label -->
+                                    <div class="absolute -right-24 top-1/2 -translate-y-1/2 text-[8px] font-mono text-text-muted uppercase tracking-widest hidden md:block">SNMP POLLING</div>
+                                </div>
+                            </div>
+
+                            <!-- Line Core to Access Row -->
+                            <div class="absolute left-[30%] top-[280px] w-0.5 h-16 arch-line -translate-x-1/2"></div>
+                            <div class="absolute left-[30%] top-[344px] w-[40%] h-0.5 arch-line-h"></div>
+
+                            <!-- Access Switches Layer -->
+                            <div class="flex justify-between px-4 mb-16">
+                                <div class="px-4 py-3 border border-white/20 bg-bg-elevated rounded font-mono text-[10px] text-text-muted">ACCESS SW 01</div>
+                                <div class="px-4 py-3 border border-white/20 bg-bg-elevated rounded font-mono text-[10px] text-text-muted">ACCESS SW 02</div>
+                                <div class="px-4 py-3 border border-white/20 bg-bg-elevated rounded font-mono text-[10px] text-text-muted">ACCESS SW 03</div>
+                            </div>
+
+                            <!-- End Devices Layer -->
+                            <div class="flex justify-center">
+                                <div class="px-12 py-4 border border-white/10 bg-bg-elevated/50 rounded-full font-mono text-xs text-text-muted italic">END DEVICES / VLANs</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Certs Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="p-8 bg-bg-card border border-white/10 rounded-xl text-center">
+                            <div class="text-3xl font-bold text-accent-cyan mb-2">CCNA</div>
+                            <div class="text-sm font-bold text-white mb-2">Cisco Certified Network Associate</div>
+                            <div class="text-xs font-mono text-text-muted uppercase tracking-widest">Routing & Switching, Security</div>
+                        </div>
+                        <div class="p-8 bg-bg-card border border-white/10 rounded-xl text-center">
+                            <div class="text-3xl font-bold text-accent-cyan mb-2">5+ Years</div>
+                            <div class="text-sm font-bold text-white mb-2">Infrastructure Experience</div>
+                            <div class="text-xs font-mono text-text-muted uppercase tracking-widest">Enterprise & SMB environments</div>
+                        </div>
+                        <div class="p-8 bg-bg-card border border-white/10 rounded-xl text-center">
+                            <div class="text-3xl font-bold text-accent-cyan mb-2">200+ Devices</div>
+                            <div class="text-sm font-bold text-white mb-2">Managed & Configured</div>
+                            <div class="text-xs font-mono text-text-muted uppercase tracking-widest">Routers, switches, firewalls</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Contact Page -->
+        <div class="page" id="page-contact">
+            <section class="pt-40 pb-20 px-6">
+                <div class="max-w-7xl mx-auto">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-20">
+                        <!-- Left - Form -->
+                        <div>
+                            <span class="font-mono text-xs text-accent-cyan tracking-[0.2em] uppercase mb-4 block">// GET IN TOUCH</span>
+                            <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-12 tracking-tight">Let's Build Something</h1>
+                            
+                            <div id="contact-success" class="hidden flex flex-col items-center justify-center p-12 bg-accent-green/5 border border-accent-green/20 rounded-2xl text-center">
+                                <div class="w-16 h-16 rounded-full bg-accent-green/20 flex items-center justify-center text-accent-green mb-6">
+                                    <i data-lucide="check" class="w-8 h-8"></i>
+                                </div>
+                                <h3 class="text-2xl font-bold text-white mb-2">Message sent!</h3>
+                                <p class="text-text-muted">I'll get back to you within 24 hours.</p>
+                                <button onclick="resetForm()" class="mt-8 text-accent-cyan font-mono text-xs uppercase tracking-widest hover:underline">Send another message</button>
+                            </div>
+
+                            <form id="contact-form" class="space-y-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="space-y-2">
+                                        <input type="text" id="form-name" placeholder="Your name" class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white placeholder:text-text-muted focus:outline-none focus:border-accent-cyan transition-colors">
+                                        <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please enter your name</p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <input type="email" id="form-email" placeholder="your@email.com" class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white placeholder:text-text-muted focus:outline-none focus:border-accent-cyan transition-colors">
+                                        <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please enter a valid email</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-2">
+                                    <select id="form-subject" class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white focus:outline-none focus:border-accent-cyan transition-colors appearance-none">
+                                        <option value="" disabled selected>Select a subject</option>
+                                        <option value="Project Inquiry">Project Inquiry</option>
+                                        <option value="Infrastructure Consultation">Infrastructure Consultation</option>
+                                        <option value="Networking Support">Networking Support</option>
+                                        <option value="General Question">General Question</option>
+                                    </select>
+                                    <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please select a subject</p>
+                                </div>
+                                <div class="space-y-2">
+                                    <textarea id="form-message" rows="5" placeholder="Describe your project or question..." class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white placeholder:text-text-muted focus:outline-none focus:border-accent-cyan transition-colors resize-none"></textarea>
+                                    <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please enter your message</p>
+                                </div>
+                                <button type="submit" class="w-full py-4 bg-accent-cyan text-bg-primary font-bold rounded-lg hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all active:scale-[0.98]">
+                                    [ SEND MESSAGE → ]
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Right - Info -->
+                        <div class="space-y-8">
+                            <div class="bg-bg-card border border-white/10 p-10 rounded-2xl space-y-8">
+                                <div>
+                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">BASED IN</div>
+                                    <div class="text-xl font-bold text-white">Johannesburg, South Africa 🇿🇦</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">AVAILABLE FOR</div>
+                                    <div class="text-xl font-bold text-white">Freelance / Contract / Full-time</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">RESPONSE TIME</div>
+                                    <div class="text-xl font-bold text-white">&lt; 24 hours</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">EMAIL</div>
+                                    <a href="mailto:hello@network.io" class="text-xl font-bold text-accent-cyan hover:underline">hello@network.io</a>
+                                </div>
+                                <div class="flex gap-4 pt-4">
+                                    <a href="#" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-text-muted hover:text-accent-cyan hover:border-accent-cyan hover:shadow-[0_0_15px_rgba(0,229,255,0.2)] transition-all"><i data-lucide="github"></i></a>
+                                    <a href="#" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-text-muted hover:text-accent-cyan hover:border-accent-cyan hover:shadow-[0_0_15px_rgba(0,229,255,0.2)] transition-all"><i data-lucide="linkedin"></i></a>
+                                    <a href="#" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-text-muted hover:text-accent-cyan hover:border-accent-cyan hover:shadow-[0_0_15px_rgba(0,229,255,0.2)] transition-all"><i data-lucide="twitter"></i></a>
+                                </div>
+                            </div>
+
+                            <div class="bg-bg-card/50 border border-white/5 p-8 rounded-2xl">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse-dot"></span>
+                                    <span class="font-mono text-[10px] text-accent-green tracking-widest uppercase">Available for new projects</span>
+                                </div>
+                                <div class="text-xs text-text-muted font-mono">Last active: Today</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="py-20 px-6 border-t border-white/10 mt-20">
+        <div class="max-w-7xl mx-auto flex flex-col items-center gap-8">
+            <div class="flex gap-6">
+                <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-5 h-5"></i></a>
+                <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-5 h-5"></i></a>
+            </div>
+            <div class="text-text-muted text-xs font-mono tracking-widest uppercase">
+                © 2025 MT Thekiso — Built with obsession
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // --- SPA Router ---
+        function handleRouting() {
+            const hash = window.location.hash || '#home';
+            const pageId = 'page-' + hash.substring(1);
+            
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+
+            // Show target page
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            } else {
+                // Fallback to home
+                document.getElementById('page-home').classList.add('active');
+            }
+
+            // Update Nav Links
+            document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(link => {
+                if (link.getAttribute('href') === hash) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+
+            // Scroll to top
+            window.scrollTo(0, 0);
+
+            // Refresh icons
+            lucide.createIcons();
+
+            // Special handling for pages
+            if (hash === '#home') {
+                initCharts();
+            }
+            if (hash === '#infrastructure') {
+                setTimeout(() => {
+                    document.querySelectorAll('.arch-line, .arch-line-h').forEach(l => l.classList.add('active'));
+                }, 500);
+            }
+        }
+
+        window.addEventListener('hashchange', handleRouting);
+        window.addEventListener('load', handleRouting);
+
+        // --- Mobile Menu ---
+        const menuToggle = document.getElementById('menu-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const menuIcon = document.getElementById('menu-icon');
+
+        menuToggle.addEventListener('click', () => {
+            mobileMenu.classList.toggle('open');
+            const isOpen = mobileMenu.classList.contains('open');
+            menuIcon.setAttribute('data-lucide', isOpen ? 'x' : 'menu');
+            lucide.createIcons();
+        });
+
+        document.querySelectorAll('.mobile-nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.remove('open');
+                menuIcon.setAttribute('data-lucide', 'menu');
+                lucide.createIcons();
+            });
+        });
+
+        // --- Navbar Scroll Effect ---
+        window.addEventListener('scroll', () => {
+            const nav = document.getElementById('navbar');
+            if (window.scrollY > 20) {
+                nav.classList.add('bg-bg-primary/80', 'backdrop-blur-nav', 'border-b', 'border-white/10', 'py-4');
+                nav.classList.remove('bg-transparent', 'py-6');
+            } else {
+                nav.classList.remove('bg-bg-primary/80', 'backdrop-blur-nav', 'border-b', 'border-white/10', 'py-4');
+                nav.classList.add('bg-transparent', 'py-6');
+            }
+        });
+
+        // --- Reveal on Scroll ---
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        function refreshReveals() {
+            document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+        }
+        refreshReveals();
+
+        // --- Counter Animation ---
+        const counterObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const target = parseFloat(entry.target.getAttribute('data-target'));
+                    const suffix = entry.target.getAttribute('data-suffix') || '';
+                    const prefix = entry.target.getAttribute('data-prefix') || '';
+                    let current = 0;
+                    const duration = 2000;
+                    const step = target / (duration / 16);
+                    
+                    const update = () => {
+                        current += step;
+                        if (current >= target) {
+                            entry.target.innerText = prefix + target.toLocaleString() + suffix;
+                        } else {
+                            entry.target.innerText = prefix + Math.floor(current).toLocaleString() + suffix;
+                            requestAnimationFrame(update);
+                        }
+                    };
+                    update();
+                    counterObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        function refreshCounters() {
+            document.querySelectorAll('.counter').forEach(c => counterObserver.observe(c));
+        }
+        refreshCounters();
+
+        // --- Charts ---
+        let charts = {};
+        function initCharts() {
+            const commonOptions = (delay = 0) => ({
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: '#16161f',
+                        titleFont: { family: 'DM Mono', size: 10 },
+                        bodyFont: { family: 'DM Mono', size: 10 },
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        cornerRadius: 4,
+                    }
+                },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        display: true,
+                        grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
+                        ticks: { color: '#6b7280', font: { size: 8, family: 'DM Mono' }, stepSize: 25 }
+                    }
+                },
+                animation: {
+                    duration: 1200,
+                    easing: 'easeInOutQuart',
+                    delay: delay
+                }
+            });
+
+            const generateData = (count = 12) => Array.from({ length: count }, () => Math.floor(Math.random() * 60) + 20);
+            const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+            const setupChart = (id, type, data, options) => {
+                const canvas = document.getElementById(id);
+                if (!canvas) return;
+                if (charts[id]) charts[id].destroy();
+                charts[id] = new Chart(canvas.getContext('2d'), { type, data, options });
+            };
+
+            setupChart('chart1', 'bar', {
+                labels,
+                datasets: [
+                    { type: 'bar', label: 'Traffic', data: generateData(), backgroundColor: '#00e5ff', borderRadius: 2, barThickness: 4 },
+                    { type: 'line', label: 'Telemetry', data: generateData(), borderColor: '#a855f7', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(168, 85, 247, 0.1)' }
+                ]
+            }, commonOptions(0));
+
+            setupChart('chart2', 'bar', {
+                labels,
+                datasets: [{ label: 'Render Rate', data: generateData(), backgroundColor: '#a855f7', borderRadius: 2, barThickness: 4 }]
+            }, commonOptions(300));
+
+            setupChart('chart3', 'line', {
+                labels,
+                datasets: [{ label: 'Page Views', data: generateData(), borderColor: '#00e5ff', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(0, 229, 255, 0.1)' }]
+            }, commonOptions(600));
+
+            setupChart('chart4', 'line', {
+                labels,
+                datasets: [{ label: 'Sessions', data: generateData(), borderColor: '#22d3a0', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(34, 211, 160, 0.1)' }]
+            }, commonOptions(900));
+        }
+
+        // --- Project Filtering ---
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'border-accent-cyan', 'text-white'));
+                btn.classList.add('active', 'border-accent-cyan', 'text-white');
+                
+                const filter = btn.getAttribute('data-filter');
+                document.querySelectorAll('.project-card').forEach(card => {
+                    const tags = card.getAttribute('data-tags');
+                    if (filter === 'all' || tags.includes(filter)) {
+                        card.style.display = 'block';
+                        setTimeout(() => card.style.opacity = '1', 10);
+                    } else {
+                        card.style.opacity = '0';
+                        setTimeout(() => card.style.display = 'none', 300);
+                    }
+                });
+            });
+        });
+
+        // --- Contact Form ---
+        const contactForm = document.getElementById('contact-form');
+        const contactSuccess = document.getElementById('contact-success');
+
+        contactForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            let isValid = true;
+
+            const name = document.getElementById('form-name');
+            const email = document.getElementById('form-email');
+            const subject = document.getElementById('form-subject');
+            const message = document.getElementById('form-message');
+
+            // Reset errors
+            document.querySelectorAll('.error-msg').forEach(m => m.classList.add('hidden'));
+
+            if (!name.value.trim()) {
+                name.nextElementSibling.classList.remove('hidden');
+                isValid = false;
+            }
+            if (!email.value.includes('@')) {
+                email.nextElementSibling.classList.remove('hidden');
+                isValid = false;
+            }
+            if (!subject.value) {
+                subject.nextElementSibling.classList.remove('hidden');
+                isValid = false;
+            }
+            if (!message.value.trim()) {
+                message.nextElementSibling.classList.remove('hidden');
+                isValid = false;
+            }
+
+            if (isValid) {
+                contactForm.classList.add('hidden');
+                contactSuccess.classList.remove('hidden');
+            }
+        });
+
+        function resetForm() {
+            contactForm.reset();
+            contactForm.classList.remove('hidden');
+            contactSuccess.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
