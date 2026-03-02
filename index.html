@@ -4,991 +4,1022 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Network.IO Monitor</title>
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Syne', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-                        mono: ['DM Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
-                    },
-                    colors: {
-                        'bg-primary': '#0a0a0f',
-                        'bg-card': '#111118',
-                        'bg-elevated': '#16161f',
-                        'accent-cyan': '#00e5ff',
-                        'accent-purple': '#a855f7',
-                        'accent-green': '#22d3a0',
-                        'text-primary': '#f0f0f5',
-                        'text-muted': '#6b7280',
-                    },
-                }
-            }
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #0a0a0f;
+            color: #f0f0f5;
+            font-family: 'Syne', sans-serif;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at 50% 50%, rgba(0,229,255,0.03) 0%, transparent 50%);
         }
-    </script>
-    <style type="text/tailwindcss">
-        @layer base {
-            body {
-                @apply bg-bg-primary text-text-primary font-sans antialiased selection:bg-accent-cyan/30 selection:text-accent-cyan;
-                background-image: radial-gradient(circle at 50% 50%, rgba(0, 229, 255, 0.03) 0%, transparent 50%);
-            }
-
-            body::before {
-                content: "";
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-                opacity: 0.03;
-                z-index: 9999;
-                background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-            }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0.025;
+            z-index: 9999;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         }
 
+        /* PAGE SYSTEM */
+        .page { display: none; }
+        .page.active { display: block; animation: fadeUp 0.45s ease-out forwards; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* NAV LINKS */
+        .nav-link {
+            position: relative;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #6b7280;
+            text-decoration: none;
+            transition: color 0.2s;
+            padding-bottom: 4px;
+        }
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 0; height: 2px;
+            background: #00e5ff;
+            transition: width 0.3s ease;
+        }
+        .nav-link:hover { color: #00e5ff; }
+        .nav-link:hover::after,
+        .nav-link.active::after { width: 100%; }
+        .nav-link.active { color: #00e5ff; }
+
+        /* PULSE */
         @keyframes pulse-dot {
-            0% { transform: scale(0.95); opacity: 0.5; }
-            50% { transform: scale(1.05); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.5; }
+            0%,100% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 1; }
         }
+        .pulse-dot { animation: pulse-dot 2s infinite ease-in-out; }
 
-        .animate-pulse-dot {
-            animation: pulse-dot 2s infinite ease-in-out;
-        }
+        /* REVEAL */
+        .reveal { opacity: 0; transform: translateY(20px); transition: all 0.7s ease-out; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
 
-        .backdrop-blur-nav {
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+        /* MOBILE MENU */
+        #mobile-menu {
+            position: fixed; inset: 0;
+            background: #0a0a0f;
+            z-index: 40;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 2rem;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
         }
+        #mobile-menu.open { transform: translateX(0); }
 
-        .page {
-            display: none;
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.4s ease-out, transform 0.4s ease-out;
-        }
-
-        .page.active {
-            display: block;
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .nav-link.active {
-            @apply text-accent-cyan;
-        }
-        
-        .nav-link.active span {
-            @apply w-full;
-        }
-
-        .reveal {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.8s ease-out;
-        }
-
-        .reveal.active {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Architecture Diagram Lines */
+        /* ARCH LINES */
         .arch-line {
-            @apply bg-white/10;
-            transition: transform 1s ease-out;
+            background: rgba(255,255,255,0.12);
+            transition: transform 0.7s ease-out;
             transform-origin: top;
             transform: scaleY(0);
         }
-        .arch-line.active {
-            transform: scaleY(1);
+        .arch-line.go { transform: scaleY(1); }
+
+        /* FORM */
+        .form-input {
+            width: 100%;
+            background: #111118;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: #f0f0f5;
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+            appearance: none;
         }
-        .arch-line-h {
-            @apply bg-white/10;
-            transition: transform 1s ease-out;
-            transform-origin: left;
-            transform: scaleX(0);
+        .form-input:focus { border-color: #00e5ff; }
+        .form-input::placeholder { color: #6b7280; }
+
+        /* PROJECT CARD */
+        .project-card {
+            background: #111118;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s, box-shadow 0.3s, opacity 0.3s;
         }
-        .arch-line-h.active {
-            transform: scaleX(1);
+        .project-card:hover {
+            transform: translateY(-6px);
+            border-color: rgba(0,229,255,0.4);
+            box-shadow: 0 0 30px rgba(0,229,255,0.08);
         }
 
-        /* Mobile Menu */
-        #mobile-menu {
-            transition: transform 0.3s ease-in-out;
-            transform: translateX(100%);
+        /* FILTER BTN */
+        .filter-btn {
+            padding: 8px 24px;
+            border-radius: 50px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: #6b7280;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        #mobile-menu.open {
-            transform: translateX(0);
+        .filter-btn:hover { border-color: rgba(0,229,255,0.4); color: white; }
+        .filter-btn.active { border-color: #00e5ff; color: #00e5ff; }
+
+        /* NAV SCROLLED */
+        .nav-scrolled {
+            background: rgba(10,10,15,0.88) !important;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+
+        /* SKILL CARD HOVER */
+        .skill-card { transition: border-color 0.2s, transform 0.2s; }
+        .skill-card:hover { border-color: rgba(0,229,255,0.2); transform: translateY(-2px); }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0a0a0f; }
+        ::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 2px; }
+
+        /* ── RESPONSIVE ─────────────────────────────────────── */
+
+        /* Tablet */
+        @media (max-width: 900px) {
+            #contact-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+            #stats-row    { grid-template-columns: 1fr !important; }
+            #chart-grid   { grid-template-columns: 1fr !important; }
+            #stats-row > div { border-right: none !important; border-bottom: 1px solid rgba(255,255,255,0.07); }
+            #stats-row > div:last-child { border-bottom: none; }
+        }
+
+        /* Mobile */
+        @media (max-width: 640px) {
+
+            /* Hero text: prevent overflow, keep on screen */
+            #hero-section { padding: 120px 20px 60px !important; }
+            #hero-title   { font-size: clamp(32px, 10vw, 48px) !important; word-break: break-word; }
+            #hero-sub     { font-size: 13px !important; padding: 0 8px; }
+
+            /* Buttons: stack vertically, full width */
+            .hero-btns {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                width: 100%;
+                padding: 0 4px;
+            }
+            .hero-btns a {
+                width: 100% !important;
+                text-align: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+            }
+
+            /* Dashboard card: tighter padding */
+            #dashboard-card { margin: 0 12px 60px !important; border-radius: 14px !important; }
+            #dash-card-header { padding: 20px !important; flex-wrap: wrap; gap: 12px; }
+            #dash-card-header h2 { font-size: 20px !important; }
+            #inner-dashboard { margin: 0 12px 16px !important; }
+
+            /* Chart panels: stack 1 column */
+            #chart-grid { grid-template-columns: 1fr !important; }
+            #chart-grid > div { border-right: none !important; }
+
+            /* Stats: stack, remove side borders */
+            #stats-row { padding: 0 12px; }
+            #stats-row > div { padding: 20px 16px !important; border-right: none !important; border-bottom: 1px solid rgba(255,255,255,0.07); }
+            #stats-row > div:last-child { border-bottom: none; }
+
+            /* Pages: reduce top padding */
+            #page-projects section,
+            #page-infrastructure section,
+            #page-contact section { padding-top: 100px !important; padding-left: 16px !important; padding-right: 16px !important; }
+
+            /* Project grid: 1 column */
+            #project-grid { grid-template-columns: 1fr !important; }
+
+            /* Filter buttons: wrap nicely */
+            #filter-row { gap: 8px !important; }
+            .filter-btn { padding: 6px 16px !important; font-size: 10px !important; }
+
+            /* Architecture diagram */
+            #arch-diagram { padding: 28px 16px !important; }
+
+            /* Contact form: 1 column name/email */
+            #form-name-row { grid-template-columns: 1fr !important; }
+
+            /* Skill cards grid */
+            .skills-grid { grid-template-columns: 1fr !important; }
+
+            /* Certs grid */
+            .certs-grid { grid-template-columns: 1fr !important; }
+
+            /* Footer */
+            footer { padding: 40px 16px !important; }
+
+            /* Page headings */
+            .page-title { font-size: clamp(28px, 8vw, 44px) !important; }
+        }
+
+        /* Very small screens */
+        @media (max-width: 380px) {
+            #hero-title { font-size: 28px !important; }
+            .hero-btns a { font-size: 12px !important; padding: 12px 20px !important; }
         }
     </style>
 </head>
 <body>
-    <!-- Nav -->
-    <nav id="navbar" class="fixed top-0 left-0 w-full z-50 transition-all duration-300 py-6 bg-transparent">
-        <div class="max-w-7xl mx-auto px-6 flex justify-between items-center">
-            <a href="#home" class="font-mono text-accent-cyan font-bold tracking-tighter text-xl">
-                &lt; NETWORK.IO /&gt;
-            </a>
-            
-            <div class="hidden md:flex items-center gap-8">
-                <a href="#home" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="home">
-                    Home
-                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
-                </a>
-                <a href="#projects" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="projects">
-                    Projects
-                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
-                </a>
-                <a href="#infrastructure" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="infrastructure">
-                    Infrastructure
-                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
-                </a>
-                <a href="#contact" class="nav-link relative group text-xs font-bold uppercase tracking-widest text-text-muted hover:text-accent-cyan transition-colors" data-page="contact">
-                    Contact
-                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full"></span>
-                </a>
-                <div class="flex items-center gap-2 pl-4 border-l border-white/10">
-                    <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse-dot"></span>
-                    <span class="font-mono text-[10px] text-accent-green tracking-widest uppercase">Systems Online</span>
-                </div>
-            </div>
-            
-            <button id="menu-toggle" class="md:hidden text-text-primary z-50">
-                <i data-lucide="menu" id="menu-icon"></i>
-            </button>
-        </div>
-    </nav>
 
-    <!-- Mobile Menu Overlay -->
-    <div id="mobile-menu" class="fixed inset-0 bg-bg-primary z-40 flex flex-col items-center justify-center gap-8 md:hidden">
-        <a href="#home" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="home">Home</a>
-        <a href="#projects" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="projects">Projects</a>
-        <a href="#infrastructure" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="infrastructure">Infrastructure</a>
-        <a href="#contact" class="mobile-nav-link text-2xl font-bold uppercase tracking-widest text-text-muted" data-page="contact">Contact</a>
-        <div class="flex items-center gap-2 mt-4">
-            <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse-dot"></span>
-            <span class="font-mono text-xs text-accent-green tracking-widest uppercase">Systems Online</span>
+<!-- ===== NAVBAR ===== -->
+<nav id="navbar" style="position:fixed;top:0;left:0;width:100%;z-index:50;padding:24px 0;transition:all 0.3s;background:transparent;">
+    <div style="max-width:1280px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;align-items:center;">
+        <a href="#home" style="font-family:'DM Mono',monospace;color:#00e5ff;font-weight:700;font-size:18px;letter-spacing:-0.02em;text-decoration:none;">&lt; NETWORK.IO /&gt;</a>
+        <div id="desktop-nav" style="display:flex;align-items:center;gap:32px;">
+            <a href="#home" class="nav-link" data-page="home">Home</a>
+            <a href="#projects" class="nav-link" data-page="projects">Projects</a>
+            <a href="#infrastructure" class="nav-link" data-page="infrastructure">Infrastructure</a>
+            <a href="#contact" class="nav-link" data-page="contact">Contact</a>
+            <div style="display:flex;align-items:center;gap:8px;padding-left:16px;border-left:1px solid rgba(255,255,255,0.1);">
+                <span class="pulse-dot" style="width:8px;height:8px;background:#22d3a0;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;color:#22d3a0;letter-spacing:0.15em;text-transform:uppercase;">Systems Online</span>
+            </div>
         </div>
+        <button id="menu-toggle" style="display:none;background:none;border:none;color:#f0f0f5;cursor:pointer;z-index:50;" aria-label="Toggle Menu">
+            <i data-lucide="menu" id="menu-icon" style="width:24px;height:24px;"></i>
+        </button>
     </div>
+</nav>
 
-    <main>
-        <!-- Home Page -->
-        <div class="page" id="page-home">
-            <section class="pt-40 pb-20 px-6 text-center">
-                <div class="max-w-4xl mx-auto">
-                    <h1 class="text-5xl md:text-7xl font-extrabold text-white mb-6 tracking-tight reveal">
-                        Infrastructure. <span class="text-accent-cyan">Visualized.</span>
-                    </h1>
-                    <p class="text-lg md:text-xl text-text-muted mb-10 max-w-2xl mx-auto reveal" style="transition-delay: 200ms">
-                        Real-time network monitoring with sub-second telemetry. 
-                        Designed for scale, built for performance.
-                    </p>
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center reveal" style="transition-delay: 400ms">
-                        <a href="#projects" class="px-8 py-4 bg-accent-cyan text-bg-primary font-bold rounded-lg hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all active:scale-95 text-center">
-                            [ View Projects ]
-                        </a>
-                        <a href="https://github.com" target="_blank" class="px-8 py-4 border border-white/20 text-white font-bold rounded-lg hover:bg-white/5 transition-all flex items-center justify-center gap-2 active:scale-95">
-                            [ GitHub <i data-lucide="github" class="w-4 h-4"></i> ]
-                        </a>
-                    </div>
-                </div>
-            </section>
+<!-- ===== MOBILE MENU ===== -->
+<div id="mobile-menu">
+    <a href="#home" class="nav-link mobile-link" data-page="home" style="font-size:22px;letter-spacing:0.15em;">Home</a>
+    <a href="#projects" class="nav-link mobile-link" data-page="projects" style="font-size:22px;letter-spacing:0.15em;">Projects</a>
+    <a href="#infrastructure" class="nav-link mobile-link" data-page="infrastructure" style="font-size:22px;letter-spacing:0.15em;">Infrastructure</a>
+    <a href="#contact" class="nav-link mobile-link" data-page="contact" style="font-size:22px;letter-spacing:0.15em;">Contact</a>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+        <span class="pulse-dot" style="width:8px;height:8px;background:#22d3a0;border-radius:50%;display:inline-block;"></span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:#22d3a0;letter-spacing:0.15em;text-transform:uppercase;">Systems Online</span>
+    </div>
+</div>
 
-            <section class="px-6 py-20 flex justify-center">
-                <div class="w-full max-w-5xl bg-bg-card rounded-[20px] border border-white/10 overflow-hidden shadow-2xl group hover:-translate-y-1 transition-transform duration-500 reveal">
-                    <div class="p-8 flex flex-col md:flex-row justify-between items-start gap-6">
-                        <div class="flex-1">
-                            <div class="flex items-center gap-3 mb-4">
-                                <span class="border-l-2 border-accent-cyan pl-2 font-mono text-[10px] font-bold text-accent-cyan tracking-widest uppercase">Networking</span>
-                            </div>
-                            <h2 class="text-3xl font-bold text-white mb-3">Network Monitor Dashboard</h2>
-                            <p class="text-text-muted max-w-xl">
-                                A custom networking dashboard designed to monitor traffic and server status, reflecting expertise in infrastructure.
-                            </p>
-                        </div>
-                        <div class="flex gap-4">
-                            <button class="p-2 rounded-full bg-white/5 text-text-muted hover:text-accent-cyan hover:bg-accent-cyan/10 transition-all">
-                                <i data-lucide="github" class="w-5 h-5"></i>
-                            </button>
-                            <button class="p-2 rounded-full bg-white/5 text-text-muted hover:text-accent-cyan hover:bg-accent-cyan/10 transition-all">
-                                <i data-lucide="external-link" class="w-5 h-5"></i>
-                            </button>
-                        </div>
-                    </div>
+<main>
 
-                    <div class="mx-8 mb-8 bg-[#0d0d14] rounded-xl border border-white/10 overflow-hidden relative">
-                        <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-accent-cyan via-accent-purple to-accent-cyan opacity-50"></div>
-                        
-                        <div class="p-4 border-b border-white/5 flex justify-between items-center">
-                            <div class="flex items-center gap-2 font-mono text-[10px] text-text-muted">
-                                USERS: LAST 7 DAYS USING MEDIAN <i data-lucide="chevron-down" class="w-3 h-3"></i>
-                            </div>
-                            <div class="flex gap-2">
-                                <div class="w-2 h-2 rounded-full bg-white/10"></div>
-                                <div class="w-2 h-2 rounded-full bg-white/10"></div>
-                                <div class="w-2 h-2 rounded-full bg-white/10"></div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2">
-                            <div class="p-6 border-r border-b border-white/5">
-                                <div class="flex justify-between items-center mb-4">
-                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Load Time vs Bounce Rate</span>
-                                    <span class="font-mono text-[10px] text-accent-cyan">57.1%</span>
-                                </div>
-                                <div class="h-32 relative">
-                                    <canvas id="chart1"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="p-6 border-b border-white/5">
-                                <div class="flex justify-between items-center mb-4">
-                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Start Render vs Bounce Rate</span>
-                                    <span class="font-mono text-[10px] text-accent-purple">LIVE</span>
-                                </div>
-                                <div class="h-32">
-                                    <canvas id="chart2"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="p-6 border-r border-white/5">
-                                <div class="flex justify-between items-center mb-6">
-                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Page Views vs Onload</span>
-                                </div>
-                                <div class="grid grid-cols-3 gap-4 mb-6">
-                                    <div>
-                                        <div class="text-xl font-bold text-accent-green">0.7s</div>
-                                        <div class="text-[8px] text-text-muted uppercase font-mono">Page Load LUX</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xl font-bold text-accent-purple">2.7M</div>
-                                        <div class="text-[8px] text-text-muted uppercase font-mono">Page Views</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xl font-bold text-white">40.6%</div>
-                                        <div class="text-[8px] text-text-muted uppercase font-mono">Bounce Rate</div>
-                                    </div>
-                                </div>
-                                <div class="h-24">
-                                    <canvas id="chart3"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="p-6">
-                                <div class="flex justify-between items-center mb-6">
-                                    <span class="font-mono text-[10px] text-text-muted uppercase tracking-wider">Sessions</span>
-                                </div>
-                                <div class="grid grid-cols-3 gap-4 mb-6">
-                                    <div>
-                                        <div class="text-xl font-bold text-accent-green">479K</div>
-                                        <div class="text-[8px] text-text-muted uppercase font-mono">Sessions LUX</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xl font-bold text-white">17min</div>
-                                        <div class="text-[8px] text-text-muted uppercase font-mono">Length</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xl font-bold text-accent-cyan">2pvs</div>
-                                        <div class="text-[8px] text-text-muted uppercase font-mono">Per Session</div>
-                                    </div>
-                                </div>
-                                <div class="h-24">
-                                    <canvas id="chart4"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Stats Row -->
-            <section class="max-w-5xl mx-auto px-6 py-12">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-0">
-                    <div class="flex flex-col items-center text-center md:border-r border-white/10">
-                        <div class="text-4xl md:text-5xl font-bold text-accent-cyan mb-2 counter" data-target="12">0</div>
-                        <div class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Active Nodes monitored</div>
-                    </div>
-                    <div class="flex flex-col items-center text-center md:border-r border-white/10">
-                        <div class="text-4xl md:text-5xl font-bold text-accent-cyan mb-2 counter" data-target="99.98" data-suffix="%">0</div>
-                        <div class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Uptime this month</div>
-                    </div>
-                    <div class="flex flex-col items-center text-center">
-                        <div class="text-4xl md:text-5xl font-bold text-accent-cyan mb-2 counter" data-target="50" data-prefix="<" data-suffix="ms">0</div>
-                        <div class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Avg response time</div>
-                    </div>
-                </div>
-            </section>
+<!-- ============================================================ -->
+<!-- HOME PAGE -->
+<!-- ============================================================ -->
+<div class="page" id="page-home">
+    <!-- Hero -->
+    <section id="hero-section" style="padding:160px 24px 80px;text-align:center;">
+        <div style="max-width:900px;margin:0 auto;">
+            <h1 id="hero-title" class="reveal page-title" style="font-size:clamp(32px,7vw,80px);font-weight:800;color:white;margin-bottom:24px;line-height:1.1;letter-spacing:-0.02em;overflow-wrap:break-word;word-break:break-word;">
+                Infrastructure. <span style="color:#00e5ff;">Visualized.</span>
+            </h1>
+            <p id="hero-sub" class="reveal" style="font-family:'DM Mono',monospace;font-size:15px;color:#6b7280;margin-bottom:40px;max-width:560px;margin-left:auto;margin-right:auto;line-height:1.8;transition-delay:0.15s;">
+                Real-time network monitoring with sub-second telemetry. Designed for scale, built for performance.
+            </p>
+            <div class="reveal hero-btns" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;transition-delay:0.3s;">
+                <a href="#projects" class="hero-btn-primary" style="padding:14px 32px;background:#00e5ff;color:#0a0a0f;font-weight:700;border-radius:8px;text-decoration:none;font-family:'DM Mono',monospace;font-size:13px;letter-spacing:0.05em;transition:box-shadow 0.2s;white-space:nowrap;">[ View Projects ]</a>
+                <a href="https://github.com" target="_blank" style="padding:14px 32px;border:1px solid rgba(255,255,255,0.2);color:white;font-weight:700;border-radius:8px;text-decoration:none;font-family:'DM Mono',monospace;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px;transition:background 0.2s;white-space:nowrap;" onmouseenter="this.style.background='rgba(255,255,255,0.05)';" onmouseleave="this.style.background='transparent';">[ GitHub <i data-lucide="github" style="width:14px;height:14px;"></i> ]</a>
+            </div>
         </div>
+    </section>
 
-        <!-- Projects Page -->
-        <div class="page" id="page-projects">
-            <section class="pt-40 pb-20 px-6">
-                <div class="max-w-7xl mx-auto">
-                    <div class="mb-16">
-                        <span class="font-mono text-xs text-accent-cyan tracking-[0.2em] uppercase mb-4 block">// ALL PROJECTS</span>
-                        <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-6 tracking-tight">What I've Built</h1>
-                        <p class="text-text-muted font-mono max-w-2xl">A collection of infrastructure tools, monitoring systems, and network automation projects.</p>
+    <!-- Dashboard Card -->
+    <section style="padding:0 16px 80px;display:flex;justify-content:center;">
+        <div id="dashboard-card" class="reveal" style="width:100%;max-width:960px;background:#111118;border-radius:20px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,0.5);transition:transform 0.4s,box-shadow 0.4s;transition-delay:0.1s;" onmouseenter="this.style.transform='translateY(-4px)';this.style.boxShadow='0 50px 100px rgba(0,0,0,0.6),0 0 40px rgba(0,229,255,0.06)';" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow='0 40px 80px rgba(0,0,0,0.5)';">
+            <!-- Card top -->
+            <div id="dash-card-header" style="padding:32px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+                <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                        <span style="border-left:2px solid #00e5ff;padding-left:10px;font-family:'DM Mono',monospace;font-size:10px;color:#00e5ff;letter-spacing:0.2em;text-transform:uppercase;">Networking</span>
                     </div>
-
-                    <!-- Filters -->
-                    <div class="flex flex-wrap gap-3 mb-12">
-                        <button class="filter-btn active px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="all">All</button>
-                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="networking">Networking</button>
-                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="python">Python</button>
-                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="security">Security</button>
-                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 font-mono text-xs text-text-muted hover:border-accent-cyan hover:text-white transition-all" data-filter="automation">Automation</button>
+                    <h2 style="font-size:28px;font-weight:700;color:white;margin-bottom:12px;">Network Monitor Dashboard</h2>
+                    <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:13px;line-height:1.7;max-width:520px;">A custom networking dashboard designed to monitor traffic and server status, reflecting expertise in infrastructure.</p>
+                </div>
+                <div style="display:flex;gap:12px;flex-shrink:0;">
+                    <a href="https://github.com" target="_blank" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;color:#6b7280;text-decoration:none;transition:all 0.2s;" onmouseenter="this.style.color='#00e5ff';this.style.background='rgba(0,229,255,0.1)';" onmouseleave="this.style.color='#6b7280';this.style.background='rgba(255,255,255,0.05)';"><i data-lucide="github" style="width:18px;height:18px;"></i></a>
+                    <a href="#" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;color:#6b7280;text-decoration:none;transition:all 0.2s;" onmouseenter="this.style.color='#00e5ff';this.style.background='rgba(0,229,255,0.1)';" onmouseleave="this.style.color='#6b7280';this.style.background='rgba(255,255,255,0.05)';"><i data-lucide="external-link" style="width:18px;height:18px;"></i></a>
+                </div>
+            </div>
+            <!-- Inner Dashboard -->
+            <div id="inner-dashboard" style="margin:0 16px 16px;background:#0d0d14;border-radius:12px;border:1px solid rgba(255,255,255,0.07);overflow:hidden;position:relative;">
+                <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,#00e5ff,#a855f7,#00e5ff);opacity:0.5;"></div>
+                <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">
+                        USERS: LAST 7 DAYS USING MEDIAN <i data-lucide="chevron-down" style="width:12px;height:12px;margin-left:4px;"></i>
                     </div>
-
-                    <!-- Project Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="project-grid">
-                        <!-- Project 1 -->
-                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="networking python">
-                            <div class="h-1 w-full bg-accent-cyan"></div>
-                            <div class="p-6">
-                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">NETWORKING</span>
-                                <h3 class="text-xl font-bold text-white mb-3">Network Monitor Dashboard</h3>
-                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Real-time network traffic visualization with sub-second telemetry using SNMP polling and Grafana dashboards. Monitors 12 active Cisco nodes with 99.98% uptime tracking.</p>
-                                <div class="flex flex-wrap gap-2 mb-6">
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Cisco</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">SNMP</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Grafana</span>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
-                                </div>
-                            </div>
+                    <div style="display:flex;gap:6px;">
+                        <div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.1);"></div>
+                        <div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.1);"></div>
+                        <div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.1);"></div>
+                    </div>
+                </div>
+                <div id="chart-grid" style="display:grid;grid-template-columns:1fr 1fr;">
+                    <div style="padding:20px;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                            <span style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Load Time vs Bounce Rate</span>
+                            <span style="font-family:'DM Mono',monospace;font-size:9px;color:#00e5ff;">57.1%</span>
                         </div>
-
-                        <!-- Project 2 -->
-                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="automation python">
-                            <div class="h-1 w-full bg-accent-purple"></div>
-                            <div class="p-6">
-                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">AUTOMATION</span>
-                                <h3 class="text-xl font-bold text-white mb-3">AutoNet Config Manager</h3>
-                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Automated network device configuration management tool that pushes IOS configs to 50+ Cisco routers via Netmiko. Includes rollback support and diff-based change detection.</p>
-                                <div class="flex flex-wrap gap-2 mb-6">
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Netmiko</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Cisco IOS</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">CLI</span>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
-                                </div>
-                            </div>
+                        <div style="height:120px;"><canvas id="chart1"></canvas></div>
+                    </div>
+                    <div style="padding:20px;border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                            <span style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Start Render vs Bounce Rate</span>
+                            <span style="font-family:'DM Mono',monospace;font-size:9px;color:#a855f7;">LIVE</span>
                         </div>
-
-                        <!-- Project 3 -->
-                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="security python">
-                            <div class="h-1 w-full bg-accent-green"></div>
-                            <div class="p-6">
-                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">SECURITY</span>
-                                <h3 class="text-xl font-bold text-white mb-3">Packet Sentinel</h3>
-                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Deep packet inspection tool built with Scapy that detects anomalous traffic patterns and generates real-time alerts. Integrates with Slack for instant incident notifications.</p>
-                                <div class="flex flex-wrap gap-2 mb-6">
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Scapy</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Security</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Slack API</span>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
-                                </div>
-                            </div>
+                        <div style="height:120px;"><canvas id="chart2"></canvas></div>
+                    </div>
+                    <div style="padding:20px;border-right:1px solid rgba(255,255,255,0.05);">
+                        <div style="margin-bottom:14px;"><span style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Page Views vs Onload</span></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+                            <div><div style="font-size:18px;font-weight:700;color:#22d3a0;line-height:1;">0.7s</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:#6b7280;margin-top:4px;text-transform:uppercase;">Page Load LUX</div></div>
+                            <div><div style="font-size:18px;font-weight:700;color:#a855f7;line-height:1;">2.7M</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:#6b7280;margin-top:4px;text-transform:uppercase;">Page Views</div></div>
+                            <div><div style="font-size:18px;font-weight:700;color:white;line-height:1;">40.6%</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:#6b7280;margin-top:4px;text-transform:uppercase;">Bounce Rate</div></div>
                         </div>
-
-                        <!-- Project 4 -->
-                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="networking python">
-                            <div class="h-1 w-full bg-accent-cyan"></div>
-                            <div class="p-6">
-                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">NETWORKING</span>
-                                <h3 class="text-xl font-bold text-white mb-3">Topology Mapper</h3>
-                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Automated network topology discovery using CDP/LLDP neighbor data. Generates interactive SVG network diagrams from live device data with zero manual input.</p>
-                                <div class="flex flex-wrap gap-2 mb-6">
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">NetworkX</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">SVG</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">LLDP</span>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
-                                </div>
-                            </div>
+                        <div style="height:80px;"><canvas id="chart3"></canvas></div>
+                    </div>
+                    <div style="padding:20px;">
+                        <div style="margin-bottom:14px;"><span style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Sessions</span></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+                            <div><div style="font-size:18px;font-weight:700;color:#22d3a0;line-height:1;">479K</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:#6b7280;margin-top:4px;text-transform:uppercase;">Sessions LUX</div></div>
+                            <div><div style="font-size:18px;font-weight:700;color:white;line-height:1;">17min</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:#6b7280;margin-top:4px;text-transform:uppercase;">Length</div></div>
+                            <div><div style="font-size:18px;font-weight:700;color:#00e5ff;line-height:1;">2pvs</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:#6b7280;margin-top:4px;text-transform:uppercase;">Per Session</div></div>
                         </div>
+                        <div style="height:80px;"><canvas id="chart4"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-                        <!-- Project 5 -->
-                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="automation python">
-                            <div class="h-1 w-full bg-accent-purple"></div>
-                            <div class="p-6">
-                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">AUTOMATION</span>
-                                <h3 class="text-xl font-bold text-white mb-3">Syslog Aggregator</h3>
-                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Centralized syslog collection and parsing pipeline that ingests logs from 200+ network devices. Uses regex-based classification to flag critical events with severity scoring.</p>
-                                <div class="flex flex-wrap gap-2 mb-6">
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Syslog</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Regex</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Elasticsearch</span>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
-                                </div>
-                            </div>
+    <!-- Stats -->
+    <section style="max-width:960px;margin:0 auto;padding:40px 24px 100px;">
+        <div id="stats-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;">
+            <div style="text-align:center;padding:32px;border-right:1px solid rgba(255,255,255,0.07);">
+                <div class="counter" data-target="12" style="font-size:clamp(36px,5vw,56px);font-weight:700;color:#00e5ff;margin-bottom:8px;">0</div>
+                <div style="font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.15em;">Active Nodes Monitored</div>
+            </div>
+            <div style="text-align:center;padding:32px;border-right:1px solid rgba(255,255,255,0.07);">
+                <div class="counter" data-target="99.98" data-suffix="%" style="font-size:clamp(36px,5vw,56px);font-weight:700;color:#00e5ff;margin-bottom:8px;">0</div>
+                <div style="font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.15em;">Uptime This Month</div>
+            </div>
+            <div style="text-align:center;padding:32px;">
+                <div class="counter" data-target="50" data-prefix="&lt;" data-suffix="ms" style="font-size:clamp(36px,5vw,56px);font-weight:700;color:#00e5ff;margin-bottom:8px;">0</div>
+                <div style="font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.15em;">Avg Response Time</div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- ============================================================ -->
+<!-- PROJECTS PAGE -->
+<!-- ============================================================ -->
+<div class="page" id="page-projects">
+    <section style="padding:140px 24px 80px;">
+        <div style="max-width:1280px;margin:0 auto;">
+            <div style="margin-bottom:56px;">
+                <span style="font-family:'DM Mono',monospace;font-size:11px;color:#00e5ff;letter-spacing:0.25em;text-transform:uppercase;display:block;margin-bottom:16px;">// ALL PROJECTS</span>
+                <h1 class="page-title" style="font-size:clamp(30px,6vw,64px);font-weight:800;color:white;margin-bottom:20px;letter-spacing:-0.02em;">What I've Built</h1>
+                <p style="font-family:'DM Mono',monospace;color:#6b7280;max-width:560px;line-height:1.7;font-size:13px;">A collection of infrastructure tools, monitoring systems, and network automation projects.</p>
+            </div>
+            <!-- Filters -->
+            <div id="filter-row" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:48px;">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="networking">Networking</button>
+                <button class="filter-btn" data-filter="python">Python</button>
+                <button class="filter-btn" data-filter="security">Security</button>
+                <button class="filter-btn" data-filter="automation">Automation</button>
+            </div>
+            <!-- Grid -->
+            <div id="project-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px;">
+
+                <div class="project-card" data-tags="networking python">
+                    <div style="height:3px;background:#00e5ff;"></div>
+                    <div style="padding:24px;">
+                        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#00e5ff;letter-spacing:0.2em;text-transform:uppercase;display:block;margin-bottom:8px;">NETWORKING</span>
+                        <h3 style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">Network Monitor Dashboard</h3>
+                        <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;margin-bottom:20px;">Real-time network traffic visualization with sub-second telemetry using SNMP polling and Grafana dashboards. Monitors 12 active Cisco nodes with 99.98% uptime tracking.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Cisco</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Python</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">SNMP</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Grafana</span>
                         </div>
-
-                        <!-- Project 6 -->
-                        <div class="project-card group bg-bg-card border border-white/10 rounded-xl overflow-hidden hover:-translate-y-1.5 hover:border-accent-cyan transition-all duration-300" data-tags="security python">
-                            <div class="h-1 w-full bg-accent-green"></div>
-                            <div class="p-6">
-                                <span class="font-mono text-[10px] text-accent-cyan tracking-widest uppercase mb-2 block">SECURITY</span>
-                                <h3 class="text-xl font-bold text-white mb-3">VPN Uptime Tracker</h3>
-                                <p class="text-text-muted text-sm mb-6 leading-relaxed">Continuous monitoring of IPSec/SSL VPN tunnels across 8 remote sites. Sends automated failover alerts and generates weekly PDF uptime reports via email.</p>
-                                <div class="flex flex-wrap gap-2 mb-6">
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">Python</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">VPN</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">IPSec</span>
-                                    <span class="px-2 py-1 bg-white/5 rounded text-[10px] font-mono text-text-muted">SMTP</span>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-4 h-4"></i></a>
-                                    <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
-                                </div>
-                            </div>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:16px;height:16px;"></i></a>
+                            <a href="#" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:16px;height:16px;"></i></a>
                         </div>
                     </div>
                 </div>
-            </section>
-        </div>
 
-        <!-- Infrastructure Page -->
-        <div class="page" id="page-infrastructure">
-            <section class="pt-40 pb-20 px-6">
-                <div class="max-w-7xl mx-auto">
-                    <div class="mb-16">
-                        <span class="font-mono text-xs text-accent-cyan tracking-[0.2em] uppercase mb-4 block">// INFRASTRUCTURE</span>
-                        <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-6 tracking-tight">The Stack Behind the Work</h1>
-                        <p class="text-text-muted font-mono max-w-2xl">Every layer of the infrastructure I work with — from physical hardware to monitoring pipelines.</p>
-                    </div>
-
-                    <!-- Skills Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-24">
-                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
-                            <div class="flex items-center gap-4 mb-6">
-                                <div class="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center text-accent-cyan">
-                                    <i data-lucide="server"></i>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Network Devices</h3>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Cisco IOS</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Cisco ASA</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Juniper</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">MikroTik</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">HP Procurve</span>
-                            </div>
+                <div class="project-card" data-tags="automation python">
+                    <div style="height:3px;background:#a855f7;"></div>
+                    <div style="padding:24px;">
+                        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#a855f7;letter-spacing:0.2em;text-transform:uppercase;display:block;margin-bottom:8px;">AUTOMATION</span>
+                        <h3 style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">AutoNet Config Manager</h3>
+                        <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;margin-bottom:20px;">Automated network device configuration management tool that pushes IOS configs to 50+ Cisco routers via Netmiko. Includes rollback support and diff-based change detection.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Python</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Netmiko</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Cisco IOS</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">CLI</span>
                         </div>
-
-                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
-                            <div class="flex items-center gap-4 mb-6">
-                                <div class="w-10 h-10 rounded-lg bg-accent-purple/10 flex items-center justify-center text-accent-purple">
-                                    <i data-lucide="activity"></i>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Monitoring & Observability</h3>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Grafana</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Prometheus</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">SNMP</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Zabbix</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">ELK Stack</span>
-                            </div>
-                        </div>
-
-                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
-                            <div class="flex items-center gap-4 mb-6">
-                                <div class="w-10 h-10 rounded-lg bg-accent-green/10 flex items-center justify-center text-accent-green">
-                                    <i data-lucide="code"></i>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Automation & Scripting</h3>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Python</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Netmiko</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Nornir</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Ansible</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Bash</span>
-                            </div>
-                        </div>
-
-                        <div class="bg-bg-card border border-white/10 p-8 rounded-xl">
-                            <div class="flex items-center gap-4 mb-6">
-                                <div class="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center text-accent-cyan">
-                                    <i data-lucide="shield"></i>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Security</h3>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Wireshark</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">Scapy</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">pfSense</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">IPSec VPN</span>
-                                <span class="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-text-muted">ACLs</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Architecture Diagram -->
-                    <div class="mb-24">
-                        <h3 class="text-2xl font-bold text-white mb-12 text-center">System Architecture</h3>
-                        <div class="max-w-3xl mx-auto relative p-12 bg-bg-card/50 border border-white/5 rounded-2xl">
-                            <!-- Internet Layer -->
-                            <div class="flex justify-center mb-16">
-                                <div class="px-8 py-4 border-2 border-orange-500/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10">INTERNET / WAN</div>
-                            </div>
-
-                            <!-- Line Internet to Firewall -->
-                            <div class="absolute left-1/2 top-[88px] w-0.5 h-16 arch-line -translate-x-1/2"></div>
-
-                            <!-- Firewall Layer -->
-                            <div class="flex justify-center mb-16">
-                                <div class="px-8 py-4 border-2 border-accent-cyan/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10">FIREWALL / ASA</div>
-                            </div>
-
-                            <!-- Line Firewall to Core -->
-                            <div class="absolute left-1/2 top-[184px] w-0.5 h-16 arch-line -translate-x-1/2"></div>
-
-                            <!-- Core & Monitoring Layer -->
-                            <div class="flex justify-center gap-12 md:gap-24 mb-16">
-                                <div class="px-8 py-4 border-2 border-accent-purple/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10">CORE SWITCH (L3)</div>
-                                <div class="px-8 py-4 border-2 border-accent-green/50 bg-bg-elevated rounded-lg font-mono text-sm text-white z-10 relative">
-                                    MONITORING SERVER
-                                    <!-- Dashed connection label -->
-                                    <div class="absolute -right-24 top-1/2 -translate-y-1/2 text-[8px] font-mono text-text-muted uppercase tracking-widest hidden md:block">SNMP POLLING</div>
-                                </div>
-                            </div>
-
-                            <!-- Line Core to Access Row -->
-                            <div class="absolute left-[30%] top-[280px] w-0.5 h-16 arch-line -translate-x-1/2"></div>
-                            <div class="absolute left-[30%] top-[344px] w-[40%] h-0.5 arch-line-h"></div>
-
-                            <!-- Access Switches Layer -->
-                            <div class="flex justify-between px-4 mb-16">
-                                <div class="px-4 py-3 border border-white/20 bg-bg-elevated rounded font-mono text-[10px] text-text-muted">ACCESS SW 01</div>
-                                <div class="px-4 py-3 border border-white/20 bg-bg-elevated rounded font-mono text-[10px] text-text-muted">ACCESS SW 02</div>
-                                <div class="px-4 py-3 border border-white/20 bg-bg-elevated rounded font-mono text-[10px] text-text-muted">ACCESS SW 03</div>
-                            </div>
-
-                            <!-- End Devices Layer -->
-                            <div class="flex justify-center">
-                                <div class="px-12 py-4 border border-white/10 bg-bg-elevated/50 rounded-full font-mono text-xs text-text-muted italic">END DEVICES / VLANs</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Certs Row -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <div class="p-8 bg-bg-card border border-white/10 rounded-xl text-center">
-                            <div class="text-3xl font-bold text-accent-cyan mb-2">CCNA</div>
-                            <div class="text-sm font-bold text-white mb-2">Cisco Certified Network Associate</div>
-                            <div class="text-xs font-mono text-text-muted uppercase tracking-widest">Routing & Switching, Security</div>
-                        </div>
-                        <div class="p-8 bg-bg-card border border-white/10 rounded-xl text-center">
-                            <div class="text-3xl font-bold text-accent-cyan mb-2">5+ Years</div>
-                            <div class="text-sm font-bold text-white mb-2">Infrastructure Experience</div>
-                            <div class="text-xs font-mono text-text-muted uppercase tracking-widest">Enterprise & SMB environments</div>
-                        </div>
-                        <div class="p-8 bg-bg-card border border-white/10 rounded-xl text-center">
-                            <div class="text-3xl font-bold text-accent-cyan mb-2">200+ Devices</div>
-                            <div class="text-sm font-bold text-white mb-2">Managed & Configured</div>
-                            <div class="text-xs font-mono text-text-muted uppercase tracking-widest">Routers, switches, firewalls</div>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:16px;height:16px;"></i></a>
+                            <a href="#" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:16px;height:16px;"></i></a>
                         </div>
                     </div>
                 </div>
-            </section>
-        </div>
 
-        <!-- Contact Page -->
-        <div class="page" id="page-contact">
-            <section class="pt-40 pb-20 px-6">
-                <div class="max-w-7xl mx-auto">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-20">
-                        <!-- Left - Form -->
+                <div class="project-card" data-tags="security python">
+                    <div style="height:3px;background:#22d3a0;"></div>
+                    <div style="padding:24px;">
+                        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#22d3a0;letter-spacing:0.2em;text-transform:uppercase;display:block;margin-bottom:8px;">SECURITY</span>
+                        <h3 style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">Packet Sentinel</h3>
+                        <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;margin-bottom:20px;">Deep packet inspection tool built with Scapy that detects anomalous traffic patterns and generates real-time alerts. Integrates with Slack for instant incident notifications.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Python</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Scapy</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Security</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Slack API</span>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:16px;height:16px;"></i></a>
+                            <a href="#" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:16px;height:16px;"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="project-card" data-tags="networking python">
+                    <div style="height:3px;background:#00e5ff;"></div>
+                    <div style="padding:24px;">
+                        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#00e5ff;letter-spacing:0.2em;text-transform:uppercase;display:block;margin-bottom:8px;">NETWORKING</span>
+                        <h3 style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">Topology Mapper</h3>
+                        <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;margin-bottom:20px;">Automated network topology discovery using CDP/LLDP neighbor data. Generates interactive SVG network diagrams from live device data with zero manual input.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Python</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">NetworkX</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">SVG</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">LLDP</span>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:16px;height:16px;"></i></a>
+                            <a href="#" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:16px;height:16px;"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="project-card" data-tags="automation python">
+                    <div style="height:3px;background:#a855f7;"></div>
+                    <div style="padding:24px;">
+                        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#a855f7;letter-spacing:0.2em;text-transform:uppercase;display:block;margin-bottom:8px;">AUTOMATION</span>
+                        <h3 style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">Syslog Aggregator</h3>
+                        <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;margin-bottom:20px;">Centralized syslog collection and parsing pipeline that ingests logs from 200+ network devices. Uses regex-based classification to flag critical events with severity scoring.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Python</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Syslog</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Regex</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Elasticsearch</span>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:16px;height:16px;"></i></a>
+                            <a href="#" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:16px;height:16px;"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="project-card" data-tags="security python">
+                    <div style="height:3px;background:#22d3a0;"></div>
+                    <div style="padding:24px;">
+                        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#22d3a0;letter-spacing:0.2em;text-transform:uppercase;display:block;margin-bottom:8px;">SECURITY</span>
+                        <h3 style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">VPN Uptime Tracker</h3>
+                        <p style="color:#6b7280;font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;margin-bottom:20px;">Continuous monitoring of IPSec/SSL VPN tunnels across 8 remote sites. Sends automated failover alerts and generates weekly PDF uptime reports via email.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">Python</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">VPN</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">IPSec</span>
+                            <span style="padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;">SMTP</span>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:16px;height:16px;"></i></a>
+                            <a href="#" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:16px;height:16px;"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- ============================================================ -->
+<!-- INFRASTRUCTURE PAGE -->
+<!-- ============================================================ -->
+<div class="page" id="page-infrastructure">
+    <section style="padding:140px 24px 80px;">
+        <div style="max-width:1280px;margin:0 auto;">
+            <div style="margin-bottom:56px;">
+                <span style="font-family:'DM Mono',monospace;font-size:11px;color:#00e5ff;letter-spacing:0.25em;text-transform:uppercase;display:block;margin-bottom:16px;">// INFRASTRUCTURE</span>
+                <h1 class="page-title" style="font-size:clamp(30px,6vw,64px);font-weight:800;color:white;margin-bottom:20px;letter-spacing:-0.02em;">The Stack Behind the Work</h1>
+                <p style="font-family:'DM Mono',monospace;color:#6b7280;max-width:560px;line-height:1.7;font-size:13px;">Every layer of the infrastructure I work with — from physical hardware to monitoring pipelines.</p>
+            </div>
+
+            <!-- Skills Grid -->
+            <div class="skills-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px;margin-bottom:80px;">
+                <div class="skill-card" style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+                        <div style="width:40px;height:40px;border-radius:8px;background:rgba(0,229,255,0.1);display:flex;align-items:center;justify-content:center;color:#00e5ff;"><i data-lucide="server" style="width:20px;height:20px;"></i></div>
+                        <h3 style="font-size:16px;font-weight:700;color:white;">Network Devices</h3>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Cisco IOS</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Cisco ASA</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Juniper</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">MikroTik</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">HP Procurve</span>
+                    </div>
+                </div>
+                <div class="skill-card" style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+                        <div style="width:40px;height:40px;border-radius:8px;background:rgba(168,85,247,0.1);display:flex;align-items:center;justify-content:center;color:#a855f7;"><i data-lucide="activity" style="width:20px;height:20px;"></i></div>
+                        <h3 style="font-size:16px;font-weight:700;color:white;">Monitoring & Observability</h3>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Grafana</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Prometheus</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">SNMP</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Zabbix</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">ELK Stack</span>
+                    </div>
+                </div>
+                <div class="skill-card" style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+                        <div style="width:40px;height:40px;border-radius:8px;background:rgba(34,211,160,0.1);display:flex;align-items:center;justify-content:center;color:#22d3a0;"><i data-lucide="code" style="width:20px;height:20px;"></i></div>
+                        <h3 style="font-size:16px;font-weight:700;color:white;">Automation & Scripting</h3>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Python</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Netmiko</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Nornir</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Ansible</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Bash</span>
+                    </div>
+                </div>
+                <div class="skill-card" style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+                        <div style="width:40px;height:40px;border-radius:8px;background:rgba(0,229,255,0.1);display:flex;align-items:center;justify-content:center;color:#00e5ff;"><i data-lucide="shield" style="width:20px;height:20px;"></i></div>
+                        <h3 style="font-size:16px;font-weight:700;color:white;">Security</h3>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Wireshark</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Scapy</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">pfSense</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">IPSec VPN</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">ACLs</span>
+                    </div>
+                </div>
+                <div class="skill-card" style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+                        <div style="width:40px;height:40px;border-radius:8px;background:rgba(168,85,247,0.1);display:flex;align-items:center;justify-content:center;color:#a855f7;"><i data-lucide="git-branch" style="width:20px;height:20px;"></i></div>
+                        <h3 style="font-size:16px;font-weight:700;color:white;">Protocols</h3>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">BGP</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">OSPF</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">EIGRP</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">STP</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">VLAN</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">MPLS</span>
+                    </div>
+                </div>
+                <div class="skill-card" style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+                        <div style="width:40px;height:40px;border-radius:8px;background:rgba(34,211,160,0.1);display:flex;align-items:center;justify-content:center;color:#22d3a0;"><i data-lucide="cloud" style="width:20px;height:20px;"></i></div>
+                        <h3 style="font-size:16px;font-weight:700;color:white;">Cloud & Virtualisation</h3>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">VMware ESXi</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">GNS3</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">EVE-NG</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">AWS VPC</span>
+                        <span style="padding:6px 14px;background:rgba(255,255,255,0.05);border-radius:50px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;">Docker</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Architecture Diagram -->
+            <div style="margin-bottom:80px;">
+                <h3 style="font-size:24px;font-weight:700;color:white;margin-bottom:48px;text-align:center;">System Architecture</h3>
+                <div id="arch-diagram" style="max-width:680px;margin:0 auto;background:rgba(17,17,24,0.6);border:1px solid rgba(255,255,255,0.05);border-radius:20px;padding:48px 40px;">
+                    <div style="display:flex;justify-content:center;"><div style="padding:12px 32px;border:2px solid rgba(251,146,60,0.5);background:#16161f;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;color:white;">INTERNET / WAN</div></div>
+                    <div class="arch-line" style="width:2px;height:44px;margin:0 auto;"></div>
+                    <div style="display:flex;justify-content:center;"><div style="padding:12px 32px;border:2px solid rgba(0,229,255,0.5);background:#16161f;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;color:white;">FIREWALL / ASA</div></div>
+                    <div class="arch-line" style="width:2px;height:44px;margin:0 auto;transition-delay:0.15s;"></div>
+                    <div style="display:flex;justify-content:center;gap:40px;align-items:center;flex-wrap:wrap;">
+                        <div style="padding:12px 24px;border:2px solid rgba(168,85,247,0.5);background:#16161f;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;color:white;">CORE SWITCH (L3)</div>
+                        <div style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-align:center;line-height:1.6;">···········<br>SNMP POLLING<br>···········</div>
+                        <div style="padding:12px 24px;border:2px solid rgba(34,211,160,0.5);background:#16161f;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;color:white;">MONITORING SERVER</div>
+                    </div>
+                    <div class="arch-line" style="width:2px;height:44px;margin:0 auto;transition-delay:0.3s;"></div>
+                    <div style="display:flex;justify-content:space-between;gap:12px;">
+                        <div style="flex:1;padding:10px;border:1px solid rgba(255,255,255,0.15);background:#16161f;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-align:center;">ACCESS SW 01</div>
+                        <div style="flex:1;padding:10px;border:1px solid rgba(255,255,255,0.15);background:#16161f;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-align:center;">ACCESS SW 02</div>
+                        <div style="flex:1;padding:10px;border:1px solid rgba(255,255,255,0.15);background:#16161f;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-align:center;">ACCESS SW 03</div>
+                    </div>
+                    <div class="arch-line" style="width:2px;height:44px;margin:0 auto;transition-delay:0.45s;"></div>
+                    <div style="display:flex;justify-content:center;"><div style="padding:12px 48px;border:1px solid rgba(255,255,255,0.1);background:rgba(22,22,31,0.5);border-radius:50px;font-family:'DM Mono',monospace;font-size:11px;color:#6b7280;font-style:italic;">END DEVICES / VLANs</div></div>
+                </div>
+            </div>
+
+            <!-- Certs -->
+            <div class="certs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:24px;">
+                <div style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;text-align:center;">
+                    <div style="font-size:28px;font-weight:700;color:#00e5ff;margin-bottom:8px;">CCNA</div>
+                    <div style="font-size:14px;font-weight:600;color:white;margin-bottom:8px;">Cisco Certified Network Associate</div>
+                    <div style="font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Routing &amp; Switching, Security</div>
+                </div>
+                <div style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;text-align:center;">
+                    <div style="font-size:28px;font-weight:700;color:#00e5ff;margin-bottom:8px;">2+ Years</div>
+                    <div style="font-size:14px;font-weight:600;color:white;margin-bottom:8px;">Infrastructure Experience</div>
+                    <div style="font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Enterprise &amp; SMB environments</div>
+                </div>
+                <div style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:32px;border-radius:12px;text-align:center;">
+                    <div style="font-size:28px;font-weight:700;color:#00e5ff;margin-bottom:8px;">20+ Devices</div>
+                    <div style="font-size:14px;font-weight:600;color:white;margin-bottom:8px;">Managed &amp; Configured</div>
+                    <div style="font-family:'DM Mono',monospace;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;">Routers, switches, firewalls</div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- ============================================================ -->
+<!-- CONTACT PAGE -->
+<!-- ============================================================ -->
+<div class="page" id="page-contact">
+    <section style="padding:140px 24px 80px;">
+        <div style="max-width:1280px;margin:0 auto;">
+            <div id="contact-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;">
+                <!-- Form -->
+                <div>
+                    <span style="font-family:'DM Mono',monospace;font-size:11px;color:#00e5ff;letter-spacing:0.25em;text-transform:uppercase;display:block;margin-bottom:16px;">// GET IN TOUCH</span>
+                    <h1 class="page-title" style="font-size:clamp(30px,5vw,56px);font-weight:800;color:white;margin-bottom:48px;letter-spacing:-0.02em;">Let's Build Something</h1>
+
+                    <div id="contact-success" style="display:none;flex-direction:column;align-items:center;padding:48px;background:rgba(34,211,160,0.05);border:1px solid rgba(34,211,160,0.2);border-radius:16px;text-align:center;">
+                        <div style="width:64px;height:64px;border-radius:50%;background:rgba(34,211,160,0.2);display:flex;align-items:center;justify-content:center;color:#22d3a0;margin-bottom:24px;"><i data-lucide="check" style="width:32px;height:32px;"></i></div>
+                        <h3 style="font-size:22px;font-weight:700;color:white;margin-bottom:8px;">Message Sent!</h3>
+                        <p style="font-family:'DM Mono',monospace;font-size:13px;color:#6b7280;line-height:1.7;">I'll get back to you within 24 hours.</p>
+                        <button onclick="resetForm()" style="margin-top:32px;background:none;border:none;color:#00e5ff;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;text-decoration:underline;">Send another message</button>
+                    </div>
+
+                    <form id="contact-form" style="display:flex;flex-direction:column;gap:20px;">
+                        <div id="form-name-row" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                            <div>
+                                <input type="text" id="form-name" placeholder="Your name" class="form-input">
+                                <p id="err-name" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:#f472b6;margin-top:6px;letter-spacing:0.1em;text-transform:uppercase;">Please enter your name</p>
+                            </div>
+                            <div>
+                                <input type="email" id="form-email" placeholder="your@email.com" class="form-input">
+                                <p id="err-email" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:#f472b6;margin-top:6px;letter-spacing:0.1em;text-transform:uppercase;">Please enter a valid email</p>
+                            </div>
+                        </div>
                         <div>
-                            <span class="font-mono text-xs text-accent-cyan tracking-[0.2em] uppercase mb-4 block">// GET IN TOUCH</span>
-                            <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-12 tracking-tight">Let's Build Something</h1>
-                            
-                            <div id="contact-success" class="hidden flex flex-col items-center justify-center p-12 bg-accent-green/5 border border-accent-green/20 rounded-2xl text-center">
-                                <div class="w-16 h-16 rounded-full bg-accent-green/20 flex items-center justify-center text-accent-green mb-6">
-                                    <i data-lucide="check" class="w-8 h-8"></i>
-                                </div>
-                                <h3 class="text-2xl font-bold text-white mb-2">Message sent!</h3>
-                                <p class="text-text-muted">I'll get back to you within 24 hours.</p>
-                                <button onclick="resetForm()" class="mt-8 text-accent-cyan font-mono text-xs uppercase tracking-widest hover:underline">Send another message</button>
-                            </div>
-
-                            <form id="contact-form" class="space-y-6">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div class="space-y-2">
-                                        <input type="text" id="form-name" placeholder="Your name" class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white placeholder:text-text-muted focus:outline-none focus:border-accent-cyan transition-colors">
-                                        <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please enter your name</p>
-                                    </div>
-                                    <div class="space-y-2">
-                                        <input type="email" id="form-email" placeholder="your@email.com" class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white placeholder:text-text-muted focus:outline-none focus:border-accent-cyan transition-colors">
-                                        <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please enter a valid email</p>
-                                    </div>
-                                </div>
-                                <div class="space-y-2">
-                                    <select id="form-subject" class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white focus:outline-none focus:border-accent-cyan transition-colors appearance-none">
-                                        <option value="" disabled selected>Select a subject</option>
-                                        <option value="Project Inquiry">Project Inquiry</option>
-                                        <option value="Infrastructure Consultation">Infrastructure Consultation</option>
-                                        <option value="Networking Support">Networking Support</option>
-                                        <option value="General Question">General Question</option>
-                                    </select>
-                                    <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please select a subject</p>
-                                </div>
-                                <div class="space-y-2">
-                                    <textarea id="form-message" rows="5" placeholder="Describe your project or question..." class="w-full bg-bg-card border border-white/10 rounded-lg px-4 py-4 text-white placeholder:text-text-muted focus:outline-none focus:border-accent-cyan transition-colors resize-none"></textarea>
-                                    <p class="error-msg hidden text-[10px] text-pink-500 font-mono uppercase tracking-widest">Please enter your message</p>
-                                </div>
-                                <button type="submit" class="w-full py-4 bg-accent-cyan text-bg-primary font-bold rounded-lg hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all active:scale-[0.98]">
-                                    [ SEND MESSAGE → ]
-                                </button>
-                            </form>
+                            <select id="form-subject" class="form-input" style="cursor:pointer;">
+                                <option value="" disabled selected style="background:#111118;">Select a subject</option>
+                                <option value="Project Inquiry" style="background:#111118;">Project Inquiry</option>
+                                <option value="Infrastructure Consultation" style="background:#111118;">Infrastructure Consultation</option>
+                                <option value="Networking Support" style="background:#111118;">Networking Support</option>
+                                <option value="General Question" style="background:#111118;">General Question</option>
+                            </select>
+                            <p id="err-subject" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:#f472b6;margin-top:6px;letter-spacing:0.1em;text-transform:uppercase;">Please select a subject</p>
                         </div>
+                        <div>
+                            <textarea id="form-message" rows="5" placeholder="Describe your project or question..." class="form-input" style="resize:none;"></textarea>
+                            <p id="err-message" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:#f472b6;margin-top:6px;letter-spacing:0.1em;text-transform:uppercase;">Please enter your message</p>
+                        </div>
+                        <button type="submit" style="width:100%;padding:16px;background:#00e5ff;color:#0a0a0f;font-weight:700;border-radius:8px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:13px;letter-spacing:0.05em;transition:box-shadow 0.2s;" onmouseenter="this.style.boxShadow='0 0 24px rgba(0,229,255,0.4)';" onmouseleave="this.style.boxShadow='none';">[ SEND MESSAGE → ]</button>
+                    </form>
+                </div>
 
-                        <!-- Right - Info -->
-                        <div class="space-y-8">
-                            <div class="bg-bg-card border border-white/10 p-10 rounded-2xl space-y-8">
-                                <div>
-                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">BASED IN</div>
-                                    <div class="text-xl font-bold text-white">Johannesburg, South Africa 🇿🇦</div>
-                                </div>
-                                <div>
-                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">AVAILABLE FOR</div>
-                                    <div class="text-xl font-bold text-white">Freelance / Contract / Full-time</div>
-                                </div>
-                                <div>
-                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">RESPONSE TIME</div>
-                                    <div class="text-xl font-bold text-white">&lt; 24 hours</div>
-                                </div>
-                                <div>
-                                    <div class="text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2">EMAIL</div>
-                                    <a href="mailto:hello@network.io" class="text-xl font-bold text-accent-cyan hover:underline">hello@network.io</a>
-                                </div>
-                                <div class="flex gap-4 pt-4">
-                                    <a href="#" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-text-muted hover:text-accent-cyan hover:border-accent-cyan hover:shadow-[0_0_15px_rgba(0,229,255,0.2)] transition-all"><i data-lucide="github"></i></a>
-                                    <a href="#" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-text-muted hover:text-accent-cyan hover:border-accent-cyan hover:shadow-[0_0_15px_rgba(0,229,255,0.2)] transition-all"><i data-lucide="linkedin"></i></a>
-                                    <a href="#" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-text-muted hover:text-accent-cyan hover:border-accent-cyan hover:shadow-[0_0_15px_rgba(0,229,255,0.2)] transition-all"><i data-lucide="twitter"></i></a>
-                                </div>
-                            </div>
-
-                            <div class="bg-bg-card/50 border border-white/5 p-8 rounded-2xl">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse-dot"></span>
-                                    <span class="font-mono text-[10px] text-accent-green tracking-widest uppercase">Available for new projects</span>
-                                </div>
-                                <div class="text-xs text-text-muted font-mono">Last active: Today</div>
-                            </div>
+                <!-- Info -->
+                <div style="display:flex;flex-direction:column;gap:24px;">
+                    <div style="background:#111118;border:1px solid rgba(255,255,255,0.08);padding:40px;border-radius:16px;display:flex;flex-direction:column;gap:28px;">
+                        <div>
+                            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:8px;">BASED IN</div>
+                            <div style="font-size:18px;font-weight:700;color:white;">Johannesburg, South Africa 🇿🇦</div>
+                        </div>
+                        <div>
+                            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:8px;">AVAILABLE FOR</div>
+                            <div style="font-size:18px;font-weight:700;color:white;">Freelance / Contract / Full-time</div>
+                        </div>
+                        <div>
+                            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:8px;">RESPONSE TIME</div>
+                            <div style="font-size:18px;font-weight:700;color:white;">&lt; 24 hours</div>
+                        </div>
+                        <div>
+                            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:8px;">EMAIL</div>
+                            <a href="mailto:hello@network.io" style="font-size:18px;font-weight:700;color:#00e5ff;text-decoration:none;" onmouseenter="this.style.textDecoration='underline';" onmouseleave="this.style.textDecoration='none';">hello@network.io</a>
+                        </div>
+                        <div style="display:flex;gap:12px;padding-top:8px;">
+                            <a href="https://github.com" target="_blank" style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#6b7280;text-decoration:none;transition:all 0.2s;" onmouseenter="this.style.color='#00e5ff';this.style.borderColor='#00e5ff';this.style.boxShadow='0 0 15px rgba(0,229,255,0.2)';" onmouseleave="this.style.color='#6b7280';this.style.borderColor='rgba(255,255,255,0.1)';this.style.boxShadow='none';"><i data-lucide="github" style="width:18px;height:18px;"></i></a>
+                            <a href="https://linkedin.com" target="_blank" style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#6b7280;text-decoration:none;transition:all 0.2s;" onmouseenter="this.style.color='#00e5ff';this.style.borderColor='#00e5ff';this.style.boxShadow='0 0 15px rgba(0,229,255,0.2)';" onmouseleave="this.style.color='#6b7280';this.style.borderColor='rgba(255,255,255,0.1)';this.style.boxShadow='none';"><i data-lucide="linkedin" style="width:18px;height:18px;"></i></a>
+                            <a href="https://twitter.com" target="_blank" style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#6b7280;text-decoration:none;transition:all 0.2s;" onmouseenter="this.style.color='#00e5ff';this.style.borderColor='#00e5ff';this.style.boxShadow='0 0 15px rgba(0,229,255,0.2)';" onmouseleave="this.style.color='#6b7280';this.style.borderColor='rgba(255,255,255,0.1)';this.style.boxShadow='none';"><i data-lucide="twitter" style="width:18px;height:18px;"></i></a>
                         </div>
                     </div>
+                    <div style="background:rgba(17,17,24,0.5);border:1px solid rgba(255,255,255,0.05);padding:28px;border-radius:16px;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                            <span class="pulse-dot" style="width:8px;height:8px;background:#22d3a0;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span style="font-family:'DM Mono',monospace;font-size:10px;color:#22d3a0;letter-spacing:0.15em;text-transform:uppercase;">Available for new projects</span>
+                        </div>
+                        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#6b7280;">Last active: Today</div>
+                    </div>
                 </div>
-            </section>
-        </div>
-    </main>
-
-    <footer class="py-20 px-6 border-t border-white/10 mt-20">
-        <div class="max-w-7xl mx-auto flex flex-col items-center gap-8">
-            <div class="flex gap-6">
-                <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="github" class="w-5 h-5"></i></a>
-                <a href="#" class="text-text-muted hover:text-accent-cyan transition-colors"><i data-lucide="external-link" class="w-5 h-5"></i></a>
-            </div>
-            <div class="text-text-muted text-xs font-mono tracking-widest uppercase">
-                © 2025 MT Thekiso — Built with obsession
             </div>
         </div>
-    </footer>
+    </section>
+</div>
 
-    <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
+</main>
 
-        // --- SPA Router ---
-        function handleRouting() {
-            const hash = window.location.hash || '#home';
-            const pageId = 'page-' + hash.substring(1);
-            
-            // Hide all pages
-            document.querySelectorAll('.page').forEach(page => {
-                page.classList.remove('active');
-            });
+<!-- FOOTER -->
+<footer style="padding:60px 24px;border-top:1px solid rgba(255,255,255,0.07);margin-top:40px;">
+    <div style="max-width:1280px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:20px;">
+        <div style="display:flex;gap:24px;">
+            <a href="https://github.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="github" style="width:20px;height:20px;"></i></a>
+            <a href="https://linkedin.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="linkedin" style="width:20px;height:20px;"></i></a>
+            <a href="https://twitter.com" target="_blank" style="color:#6b7280;transition:color 0.2s;" onmouseenter="this.style.color='#00e5ff';" onmouseleave="this.style.color='#6b7280';"><i data-lucide="external-link" style="width:20px;height:20px;"></i></a>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#6b7280;letter-spacing:0.15em;text-transform:uppercase;">© 2025 MT Thekiso — Built with obsession</div>
+    </div>
+</footer>
 
-            // Show target page
-            const targetPage = document.getElementById(pageId);
-            if (targetPage) {
-                targetPage.classList.add('active');
-            } else {
-                // Fallback to home
-                document.getElementById('page-home').classList.add('active');
-            }
+<script>
+    // ── ICONS ──────────────────────────────────────────────────────────
+    lucide.createIcons();
 
-            // Update Nav Links
-            document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(link => {
-                if (link.getAttribute('href') === hash) {
-                    link.classList.add('active');
-                } else {
-                    link.classList.remove('active');
+    // ── CHARTS ────────────────────────────────────────────────────────
+    const charts = {};
+
+    function initCharts() {
+        const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
+        const gen = () => Array.from({length:12}, () => Math.floor(Math.random()*60)+20);
+
+        const base = {
+            responsive:true, maintainAspectRatio:false,
+            plugins:{
+                legend:{display:false},
+                tooltip:{
+                    enabled:true,
+                    backgroundColor:'#16161f',
+                    titleFont:{family:'DM Mono',size:9},
+                    bodyFont:{family:'DM Mono',size:9},
+                    borderColor:'rgba(255,255,255,0.1)',
+                    borderWidth:1, padding:8, displayColors:false, cornerRadius:4
                 }
-            });
+            },
+            scales:{
+                x:{display:false},
+                y:{display:true, grid:{color:'rgba(255,255,255,0.03)',drawTicks:false}, ticks:{color:'#6b7280',font:{size:8,family:'DM Mono'},stepSize:25}, max:100}
+            },
+            animation:{duration:1200, easing:'easeInOutQuart'}
+        };
 
-            // Scroll to top
-            window.scrollTo(0, 0);
+        const noY = {...base, scales:{x:{display:false}, y:{display:false}}};
 
-            // Refresh icons
-            lucide.createIcons();
+        function make(id, config) {
+            const c = document.getElementById(id);
+            if (!c) return;
+            if (charts[id]) { charts[id].destroy(); }
+            charts[id] = new Chart(c.getContext('2d'), config);
+        }
 
-            // Special handling for pages
-            if (hash === '#home') {
+        make('chart1', {
+            data:{labels, datasets:[
+                {type:'bar', data:gen(), backgroundColor:'#00e5ff', borderRadius:2, barThickness:4},
+                {type:'line', data:gen(), borderColor:'#a855f7', borderWidth:2, pointRadius:0, tension:0.4, fill:true, backgroundColor:'rgba(168,85,247,0.1)'}
+            ]}, options:{...base}
+        });
+
+        make('chart2', {
+            type:'bar',
+            data:{labels, datasets:[{data:gen(), backgroundColor:'#a855f7', borderRadius:2, barThickness:4}]},
+            options:{...base}
+        });
+
+        make('chart3', {
+            type:'line',
+            data:{labels, datasets:[{data:gen(), borderColor:'#00e5ff', borderWidth:2, pointRadius:0, tension:0.4, fill:true, backgroundColor:'rgba(0,229,255,0.08)'}]},
+            options:{...noY}
+        });
+
+        make('chart4', {
+            type:'line',
+            data:{labels, datasets:[{data:gen(), borderColor:'#22d3a0', borderWidth:2, pointRadius:0, tension:0.4, fill:true, backgroundColor:'rgba(34,211,160,0.08)'}]},
+            options:{...noY}
+        });
+    }
+
+    // ── SPA ROUTER ────────────────────────────────────────────────────
+    function navigate(hash) {
+        if (!hash || hash === '#' || hash === '') hash = '#home';
+        const name = hash.replace('#', '');
+        const target = document.getElementById('page-' + name);
+        if (!target) { navigate('#home'); return; }
+
+        // Hide all
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+        // Show target
+        target.classList.add('active');
+
+        // Update nav active states
+        document.querySelectorAll('.nav-link').forEach(l => {
+            l.classList.toggle('active', l.getAttribute('href') === hash);
+        });
+
+        // Scroll top
+        window.scrollTo({top:0, behavior:'instant'});
+
+        // Page-specific
+        if (name === 'home') {
+            setTimeout(() => {
                 initCharts();
-            }
-            if (hash === '#infrastructure') {
-                setTimeout(() => {
-                    document.querySelectorAll('.arch-line, .arch-line-h').forEach(l => l.classList.add('active'));
-                }, 500);
-            }
-        }
-
-        window.addEventListener('hashchange', handleRouting);
-        window.addEventListener('load', handleRouting);
-
-        // --- Mobile Menu ---
-        const menuToggle = document.getElementById('menu-toggle');
-        const mobileMenu = document.getElementById('mobile-menu');
-        const menuIcon = document.getElementById('menu-icon');
-
-        menuToggle.addEventListener('click', () => {
-            mobileMenu.classList.toggle('open');
-            const isOpen = mobileMenu.classList.contains('open');
-            menuIcon.setAttribute('data-lucide', isOpen ? 'x' : 'menu');
-            lucide.createIcons();
-        });
-
-        document.querySelectorAll('.mobile-nav-link').forEach(link => {
-            link.addEventListener('click', () => {
-                mobileMenu.classList.remove('open');
-                menuIcon.setAttribute('data-lucide', 'menu');
                 lucide.createIcons();
-            });
-        });
-
-        // --- Navbar Scroll Effect ---
-        window.addEventListener('scroll', () => {
-            const nav = document.getElementById('navbar');
-            if (window.scrollY > 20) {
-                nav.classList.add('bg-bg-primary/80', 'backdrop-blur-nav', 'border-b', 'border-white/10', 'py-4');
-                nav.classList.remove('bg-transparent', 'py-6');
-            } else {
-                nav.classList.remove('bg-bg-primary/80', 'backdrop-blur-nav', 'border-b', 'border-white/10', 'py-4');
-                nav.classList.add('bg-transparent', 'py-6');
-            }
-        });
-
-        // --- Reveal on Scroll ---
-        const revealObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('active');
-                }
-            });
-        }, { threshold: 0.1 });
-        
-        function refreshReveals() {
-            document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+                initReveals();
+                initCounters();
+            }, 80);
         }
-        refreshReveals();
-
-        // --- Counter Animation ---
-        const counterObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const target = parseFloat(entry.target.getAttribute('data-target'));
-                    const suffix = entry.target.getAttribute('data-suffix') || '';
-                    const prefix = entry.target.getAttribute('data-prefix') || '';
-                    let current = 0;
-                    const duration = 2000;
-                    const step = target / (duration / 16);
-                    
-                    const update = () => {
-                        current += step;
-                        if (current >= target) {
-                            entry.target.innerText = prefix + target.toLocaleString() + suffix;
-                        } else {
-                            entry.target.innerText = prefix + Math.floor(current).toLocaleString() + suffix;
-                            requestAnimationFrame(update);
-                        }
-                    };
-                    update();
-                    counterObserver.unobserve(entry.target);
-                }
-            });
-        }, { threshold: 0.5 });
-        
-        function refreshCounters() {
-            document.querySelectorAll('.counter').forEach(c => counterObserver.observe(c));
-        }
-        refreshCounters();
-
-        // --- Charts ---
-        let charts = {};
-        function initCharts() {
-            const commonOptions = (delay = 0) => ({
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { intersect: false, mode: 'index' },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        enabled: true,
-                        backgroundColor: '#16161f',
-                        titleFont: { family: 'DM Mono', size: 10 },
-                        bodyFont: { family: 'DM Mono', size: 10 },
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        borderWidth: 1,
-                        padding: 10,
-                        displayColors: false,
-                        cornerRadius: 4,
-                    }
-                },
-                scales: {
-                    x: { display: false },
-                    y: {
-                        display: true,
-                        grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
-                        ticks: { color: '#6b7280', font: { size: 8, family: 'DM Mono' }, stepSize: 25 }
-                    }
-                },
-                animation: {
-                    duration: 1200,
-                    easing: 'easeInOutQuart',
-                    delay: delay
-                }
-            });
-
-            const generateData = (count = 12) => Array.from({ length: count }, () => Math.floor(Math.random() * 60) + 20);
-            const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-
-            const setupChart = (id, type, data, options) => {
-                const canvas = document.getElementById(id);
-                if (!canvas) return;
-                if (charts[id]) charts[id].destroy();
-                charts[id] = new Chart(canvas.getContext('2d'), { type, data, options });
-            };
-
-            setupChart('chart1', 'bar', {
-                labels,
-                datasets: [
-                    { type: 'bar', label: 'Traffic', data: generateData(), backgroundColor: '#00e5ff', borderRadius: 2, barThickness: 4 },
-                    { type: 'line', label: 'Telemetry', data: generateData(), borderColor: '#a855f7', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(168, 85, 247, 0.1)' }
-                ]
-            }, commonOptions(0));
-
-            setupChart('chart2', 'bar', {
-                labels,
-                datasets: [{ label: 'Render Rate', data: generateData(), backgroundColor: '#a855f7', borderRadius: 2, barThickness: 4 }]
-            }, commonOptions(300));
-
-            setupChart('chart3', 'line', {
-                labels,
-                datasets: [{ label: 'Page Views', data: generateData(), borderColor: '#00e5ff', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(0, 229, 255, 0.1)' }]
-            }, commonOptions(600));
-
-            setupChart('chart4', 'line', {
-                labels,
-                datasets: [{ label: 'Sessions', data: generateData(), borderColor: '#22d3a0', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(34, 211, 160, 0.1)' }]
-            }, commonOptions(900));
-        }
-
-        // --- Project Filtering ---
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'border-accent-cyan', 'text-white'));
-                btn.classList.add('active', 'border-accent-cyan', 'text-white');
-                
-                const filter = btn.getAttribute('data-filter');
-                document.querySelectorAll('.project-card').forEach(card => {
-                    const tags = card.getAttribute('data-tags');
-                    if (filter === 'all' || tags.includes(filter)) {
-                        card.style.display = 'block';
-                        setTimeout(() => card.style.opacity = '1', 10);
-                    } else {
-                        card.style.opacity = '0';
-                        setTimeout(() => card.style.display = 'none', 300);
-                    }
+        if (name === 'infrastructure') {
+            setTimeout(() => {
+                document.querySelectorAll('.arch-line').forEach((el, i) => {
+                    setTimeout(() => el.classList.add('go'), i * 160);
                 });
+                lucide.createIcons();
+            }, 200);
+        }
+        if (name === 'projects' || name === 'contact') {
+            setTimeout(() => lucide.createIcons(), 80);
+        }
+    }
+
+    // Intercept all hash links
+    document.addEventListener('click', function(e) {
+        const a = e.target.closest('a[href^="#"]');
+        if (!a) return;
+        const href = a.getAttribute('href');
+        if (href && href.length > 1) {
+            e.preventDefault();
+            history.pushState(null, '', href);
+            navigate(href);
+            // Close mobile menu
+            document.getElementById('mobile-menu').classList.remove('open');
+            document.getElementById('menu-icon').setAttribute('data-lucide','menu');
+            lucide.createIcons();
+        }
+    });
+
+    window.addEventListener('hashchange', () => navigate(window.location.hash));
+    window.addEventListener('load', () => navigate(window.location.hash || '#home'));
+
+    // ── REVEAL ────────────────────────────────────────────────────────
+    function initReveals() {
+        const obs = new IntersectionObserver(entries => {
+            entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }});
+        }, {threshold:0.1});
+        document.querySelectorAll('.reveal').forEach(el => { el.classList.remove('visible'); obs.observe(el); });
+    }
+
+    // ── COUNTERS ─────────────────────────────────────────────────────
+    function initCounters() {
+        const obs = new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                if (!e.isIntersecting) return;
+                const el = e.target;
+                const target = parseFloat(el.dataset.target);
+                const suffix = el.dataset.suffix || '';
+                const prefix = el.dataset.prefix || '';
+                const isFloat = target % 1 !== 0;
+                const t0 = performance.now();
+                const dur = 1800;
+                function tick(now) {
+                    const p = Math.min((now-t0)/dur, 1);
+                    const eased = 1 - Math.pow(1-p, 3);
+                    const v = eased * target;
+                    el.innerHTML = prefix + (isFloat ? v.toFixed(2) : Math.floor(v).toLocaleString()) + suffix;
+                    if (p < 1) requestAnimationFrame(tick);
+                    else el.innerHTML = prefix + (isFloat ? target.toFixed(2) : target.toLocaleString()) + suffix;
+                }
+                requestAnimationFrame(tick);
+                obs.unobserve(el);
+            });
+        }, {threshold:0.5});
+        document.querySelectorAll('.counter').forEach(el => obs.observe(el));
+    }
+
+    // ── NAVBAR SCROLL ─────────────────────────────────────────────────
+    window.addEventListener('scroll', () => {
+        const nav = document.getElementById('navbar');
+        if (window.scrollY > 20) {
+            nav.classList.add('nav-scrolled');
+            nav.style.padding = '14px 0';
+        } else {
+            nav.classList.remove('nav-scrolled');
+            nav.style.padding = '24px 0';
+        }
+    });
+
+    // ── MOBILE MENU ───────────────────────────────────────────────────
+    document.getElementById('menu-toggle').addEventListener('click', function() {
+        const menu = document.getElementById('mobile-menu');
+        const isOpen = menu.classList.toggle('open');
+        document.getElementById('menu-icon').setAttribute('data-lucide', isOpen ? 'x' : 'menu');
+        lucide.createIcons();
+    });
+
+    // ── RESPONSIVE ────────────────────────────────────────────────────
+    function handleResize() {
+        const w = window.innerWidth;
+        document.getElementById('desktop-nav').style.display = w < 768 ? 'none' : 'flex';
+        document.getElementById('menu-toggle').style.display = w < 768 ? 'block' : 'none';
+        if (w >= 768) document.getElementById('mobile-menu').classList.remove('open');
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    // ── PROJECT FILTERS ───────────────────────────────────────────────
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const filter = this.dataset.filter;
+            document.querySelectorAll('.project-card').forEach(card => {
+                const match = filter === 'all' || card.dataset.tags.includes(filter);
+                if (match) {
+                    card.style.display = 'block';
+                    card.style.opacity = '0';
+                    requestAnimationFrame(() => card.style.opacity = '1');
+                } else {
+                    card.style.opacity = '0';
+                    setTimeout(() => card.style.display = 'none', 300);
+                }
             });
         });
+    });
 
-        // --- Contact Form ---
-        const contactForm = document.getElementById('contact-form');
-        const contactSuccess = document.getElementById('contact-success');
+    // ── CONTACT FORM ─────────────────────────────────────────────────
+    document.getElementById('contact-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = document.getElementById('form-name');
+        const email = document.getElementById('form-email');
+        const subject = document.getElementById('form-subject');
+        const message = document.getElementById('form-message');
 
-        contactForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            let isValid = true;
+        ['err-name','err-email','err-subject','err-message'].forEach(id => document.getElementById(id).style.display = 'none');
+        [name,email,subject,message].forEach(el => el.style.borderColor = 'rgba(255,255,255,0.1)');
 
-            const name = document.getElementById('form-name');
-            const email = document.getElementById('form-email');
-            const subject = document.getElementById('form-subject');
-            const message = document.getElementById('form-message');
+        let ok = true;
+        if (!name.value.trim()) { document.getElementById('err-name').style.display='block'; name.style.borderColor='#f472b6'; ok=false; }
+        if (!email.value.includes('@') || !email.value.includes('.')) { document.getElementById('err-email').style.display='block'; email.style.borderColor='#f472b6'; ok=false; }
+        if (!subject.value) { document.getElementById('err-subject').style.display='block'; subject.style.borderColor='#f472b6'; ok=false; }
+        if (!message.value.trim()) { document.getElementById('err-message').style.display='block'; message.style.borderColor='#f472b6'; ok=false; }
 
-            // Reset errors
-            document.querySelectorAll('.error-msg').forEach(m => m.classList.add('hidden'));
-
-            if (!name.value.trim()) {
-                name.nextElementSibling.classList.remove('hidden');
-                isValid = false;
-            }
-            if (!email.value.includes('@')) {
-                email.nextElementSibling.classList.remove('hidden');
-                isValid = false;
-            }
-            if (!subject.value) {
-                subject.nextElementSibling.classList.remove('hidden');
-                isValid = false;
-            }
-            if (!message.value.trim()) {
-                message.nextElementSibling.classList.remove('hidden');
-                isValid = false;
-            }
-
-            if (isValid) {
-                contactForm.classList.add('hidden');
-                contactSuccess.classList.remove('hidden');
-            }
-        });
-
-        function resetForm() {
-            contactForm.reset();
-            contactForm.classList.remove('hidden');
-            contactSuccess.classList.add('hidden');
+        if (ok) {
+            this.style.display = 'none';
+            const s = document.getElementById('contact-success');
+            s.style.display = 'flex';
+            lucide.createIcons();
         }
-    </script>
+    });
+
+    function resetForm() {
+        document.getElementById('contact-form').reset();
+        document.getElementById('contact-form').style.display = 'flex';
+        document.getElementById('contact-success').style.display = 'none';
+    }
+
+    // Hero button glow
+    document.querySelectorAll('.hero-btn-primary').forEach(btn => {
+        btn.addEventListener('mouseenter', () => btn.style.boxShadow = '0 0 24px rgba(0,229,255,0.4)');
+        btn.addEventListener('mouseleave', () => btn.style.boxShadow = 'none');
+    });
+</script>
 </body>
 </html>
